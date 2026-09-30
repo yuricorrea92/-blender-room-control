@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#062e5d">
+<title>Applied Nutrition — Blender Control</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:#f4f7fb;color:#102b48}
+button,input{font:inherit}button{cursor:pointer}.login{min-height:100vh;background:linear-gradient(135deg,#062d59,#0875c9);display:grid;place-items:center;padding:20px}
+.card{background:#fff;border:1px solid #dce5ee;border-radius:16px;box-shadow:0 8px 28px #173b5f18}.loginCard{width:min(430px,94vw);padding:34px}
+.ey{font-size:11px;font-weight:900;letter-spacing:1.4px;color:#1473ca}.login h1{margin:8px 0}.pin{width:100%;font-size:27px;letter-spacing:10px;text-align:center;padding:14px;border:2px solid #d5e0eb;border-radius:10px;margin:12px 0}
+.primary,.secondary,.danger{border:0;border-radius:10px;padding:13px 16px;font-weight:800}.primary{background:#0875df;color:#fff}.secondary{background:#eaf5ff;color:#075fae;border:1px solid #bad6ef}.danger{background:#c82d2d;color:#fff}
+header{min-height:66px;background:#062e5d;color:#fff;display:flex;align-items:center;padding:10px 4%;gap:12px}.grow{flex:1}.wrap{max-width:1050px;margin:auto;padding:34px 18px}.muted,.small{color:#6b7e91}.small{font-size:12px}
+.choice{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:24px}.tile{border:0;border-radius:17px;padding:26px;text-align:left;color:#fff;background:#0b67c2;min-height:135px}.tile.green{background:#087c63}.tile b{display:block;font-size:23px;margin-bottom:7px}
+.spec{overflow:hidden;margin-top:18px}.row{width:100%;display:grid;grid-template-columns:1fr 90px;gap:10px;text-align:left;border:0;border-top:1px solid #edf1f5;background:#fff;padding:15px 18px}.row span{display:block;font-size:11px;color:#6c7f91}.row.selected{background:#edf7ff}
+.status{padding:7px 10px;border-radius:999px;font-size:11px;font-weight:900;background:#fff0ca;color:#895600;display:inline-block}.work{padding:20px;margin-top:16px}.bar{height:8px;background:#e8edf2;border-radius:8px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:#159a59}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.modal{position:fixed;inset:0;background:#04182cdd;display:grid;place-items:center;padding:18px;z-index:20}.dialog{width:min(520px,96vw);background:#fff;border-radius:17px;padding:27px}
+.material{background:#fff4d8;border:1px solid #efd28a;border-radius:11px;padding:17px;margin:14px 0}.material b{display:block;font-size:22px}.hold{background:#b42318;color:#fff;padding:12px 18px;font-weight:800}.scan{font-size:54px;text-align:center}.master{text-align:center;padding:35px;margin-top:30px}
+.ok{background:#eaf8ef;border:1px solid #a7dfba;border-radius:12px;padding:15px;margin-top:15px;color:#17683a}
+@media(max-width:650px){.choice{grid-template-columns:1fr}header{font-size:12px}.wrap{padding:25px 14px}.row{grid-template-columns:1fr 70px}.primary,.secondary,.danger{flex:1}}
+</style>
+</head>
+<body><div id="app"></div>
+<script>
+const items=[
+ {name:'Maltodextrin',kg:25,qty:40,scan:0,confirmed:false},
+ {name:'Skimmed Milk Powder',kg:25,qty:30,scan:0,confirmed:false},
+ {name:'Whey Protein Concentrate',kg:20,qty:15,scan:0,confirmed:false},
+ {name:'Vanilla Flavour',kg:5,qty:4,scan:0,confirmed:false}
+];
+let s={login:false,user:'',mode:'home',active:null,holding:false,master:false,fillOpen:false,audit:[]};
+const A=document.getElementById('app');
+function log(x){s.audit.unshift(new Date().toLocaleTimeString()+' — '+x)}
+function header(){return `<header><b>APPLIED NUTRITION</b><span>Blender Control</span><span class="grow"></span><button class="secondary" onclick="home()">Home</button></header>`}
+function render(){
+ if(!s.login){
+  A.innerHTML=`<main class="login"><div class="card loginCard"><span class="ey">BLENDER CONTROL</span><h1>Operator login</h1><p class="muted">Enter your 6-digit PIN</p><input id="pin" class="pin" inputmode="numeric" maxlength="6" placeholder="••••••"><button class="primary" style="width:100%" onclick="login()">Login</button><p class="small">Prototype: use any 6 digits.</p></div></main>`; return;
+ }
+ if(s.mode==='home'){
+  A.innerHTML=header()+`<main class="wrap"><span class="ey">WELCOME, ${s.user.toUpperCase()}</span><h1>Select operation</h1><p class="muted">An employee may work in Build and Filling. Independent Check 1 and Check 2 within the same stage must be completed by different operators in the production version.</p>
+  <div class="choice"><button class="tile" onclick="openMode('build')"><b>Build Pallet</b><span>Prepare, label and verify ingredients</span></button><button class="tile green" onclick="openMode('fill')"><b>Filling Check</b><span>Scan the pallet and verify ingredients before filling</span></button></div>
+  <div class="card work"><b>Current batch</b><p>Whey Vanilla · WV260930-04 · Spec WV-V3 · Pallet 1/2</p><span class="status">${s.holding?'HOLDING':s.master?'READY FOR BLENDER':'ACTIVE'}</span></div></main>`; return;
+ }
+ if(s.mode==='fill'&&!s.fillOpen){
+  A.innerHTML=header()+`<main class="wrap"><div class="card master"><div class="scan">▦</div><span class="ey">FILLING TEAM</span><h2>Scan Pallet Master QR</h2><p class="muted">The pallet must be identified before any ingredient is scanned.</p><button class="primary" onclick="s.fillOpen=true;resetConfirmations();log('Master Pallet QR scanned');render()">Simulate Master QR Scan</button></div></main>`;return;
+ }
+ const stage=s.mode==='build'?'BUILD PALLET':'FILLING CHECK';
+ const rows=items.map((x,i)=>`<button class="row ${s.active===i?'selected':''}" onclick="s.active=${i};render()"><div><b>${x.name}</b><span>${x.kg} kg bag · ${x.qty} required</span></div><b>${x.scan}/${x.qty}</b></button>`).join('');
+ A.innerHTML=header()+(s.holding?'<div class="hold">HOLDING — supervisor intervention required</div>':'')+`<main class="wrap"><span class="ey">${stage}</span><h1>Whey Vanilla</h1><p class="muted">Batch WV260930-04 · Spec WV-V3 · Pallet 1/2</p><div class="card spec">${rows}</div>${s.active===null?'':work(items[s.active])}
+ <div class="actions"><button class="secondary" onclick="switchOp()">Switch operator</button><button class="secondary" onclick="audit()">Audit trail</button>${s.mode==='build'&&!s.master?'<button class="primary" onclick="master()">Print Master Pallet Label</button>':''}</div>
+ ${s.master?'<div class="ok"><b>Master Pallet Label generated.</b><br>Batch WV260930-04 is Ready for Blender.</div>':''}</main>`;
+}
+function work(x){
+ const p=Math.round(x.scan/x.qty*100);
+ return `<div class="card work"><span class="ey">INGREDIENT VERIFICATION</span><h2>${x.name}</h2><p>${x.kg} kg · ${x.qty} bags required</p><div class="bar"><i style="width:${p}%"></i></div><b>${x.scan} / ${x.qty} scanned</b><div class="actions">${s.mode==='build'?`<button class="secondary" onclick="printLabels()">Print ${x.qty} Labels</button>`:''}<button class="primary" onclick="scan()">Scan Next QR</button><button class="danger" onclick="hold('discrepancy on ${x.name}')">Report discrepancy</button></div></div>`;
+}
+function login(){const p=document.getElementById('pin').value.replace(/\D/g,'');if(p.length!==6)return alert('Enter 6 digits');s.login=true;s.user='Operator '+p.slice(-4);log(s.user+' logged in');render()}
+function home(){s.mode='home';s.active=null;render()}
+function openMode(m){s.mode=m;s.active=null;if(m==='fill')s.fillOpen=false;resetConfirmations();log(s.user+' opened '+m);render()}
+function resetConfirmations(){items.forEach(x=>x.confirmed=false)}
+function scan(){const x=items[s.active];if(!x.confirmed)return confirmMat(x);if(x.scan<x.qty){x.scan++;log(x.name+' '+x.scan+'/'+x.qty+' scanned');render()}else alert('All required bags have already been scanned.')}
+function confirmMat(x){A.insertAdjacentHTML('beforeend',`<div class="modal"><div class="dialog"><span class="ey">FIRST SCAN</span><h2>Confirm material</h2><p>Does the physical product and bag weight match the system?</p><div class="material"><b>${x.name}</b><strong>${x.kg} kg</strong></div><div class="actions"><button class="primary" onclick="okMat()">✓ Confirm</button><button class="danger" onclick="badMat()">✕ Does Not Match</button></div></div></div>`)}
+function okMat(){const x=items[s.active];x.confirmed=true;if(x.scan===0)x.scan=1;log('First bag confirmed: '+x.name+' '+x.kg+' kg');render()}
+function badMat(){hold('material/weight mismatch')}
+function hold(reason){s.holding=true;log('HOLDING: '+reason);render()}
+function switchOp(){const p=prompt('Enter next operator 6-digit PIN');if(!p||p.replace(/\D/g,'').length!==6)return;s.user='Operator '+p.replace(/\D/g,'').slice(-4);resetConfirmations();log('Operator switched to '+s.user);render()}
+function printLabels(){const x=items[s.active];log(x.qty+' labels printed for '+x.name);alert(`Zebra preview\n${x.name}\n${x.kg} kg\nLabels 01/${x.qty} to ${x.qty}/${x.qty}\nBatch WV260930-04`)}
+function master(){if(s.holding)return alert('Master label blocked: pallet is HOLDING.');if(items.some(x=>x.scan<x.qty))return alert('Master label blocked: ingredient scans are incomplete.');s.master=true;log('Master Pallet Label generated');render()}
+function audit(){alert(s.audit.length?s.audit.join('\n'):'No audit events yet.')}
+render();
+</script></body></html>
