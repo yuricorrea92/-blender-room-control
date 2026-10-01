@@ -1,72 +1,101 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
+<html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#062e5d">
-<title>Applied Nutrition — Blender Control</title>
+<meta name="theme-color" content="#062e5d"><title>Applied Nutrition — Blender Control</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:#f4f7fb;color:#102b48}
-button,input{font:inherit}button{cursor:pointer}.login{min-height:100vh;background:linear-gradient(135deg,#062d59,#0875c9);display:grid;place-items:center;padding:20px}
-.card{background:#fff;border:1px solid #dce5ee;border-radius:16px;box-shadow:0 8px 28px #173b5f18}.loginCard{width:min(430px,94vw);padding:34px}
-.ey{font-size:11px;font-weight:900;letter-spacing:1.4px;color:#1473ca}.login h1{margin:8px 0}.pin{width:100%;font-size:27px;letter-spacing:10px;text-align:center;padding:14px;border:2px solid #d5e0eb;border-radius:10px;margin:12px 0}
-.primary,.secondary,.danger{border:0;border-radius:10px;padding:13px 16px;font-weight:800}.primary{background:#0875df;color:#fff}.secondary{background:#eaf5ff;color:#075fae;border:1px solid #bad6ef}.danger{background:#c82d2d;color:#fff}
-header{min-height:66px;background:#062e5d;color:#fff;display:flex;align-items:center;padding:10px 4%;gap:12px}.grow{flex:1}.wrap{max-width:1050px;margin:auto;padding:34px 18px}.muted,.small{color:#6b7e91}.small{font-size:12px}
-.choice{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:24px}.tile{border:0;border-radius:17px;padding:26px;text-align:left;color:#fff;background:#0b67c2;min-height:135px}.tile.green{background:#087c63}.tile b{display:block;font-size:23px;margin-bottom:7px}
-.spec{overflow:hidden;margin-top:18px}.row{width:100%;display:grid;grid-template-columns:1fr 90px;gap:10px;text-align:left;border:0;border-top:1px solid #edf1f5;background:#fff;padding:15px 18px}.row span{display:block;font-size:11px;color:#6c7f91}.row.selected{background:#edf7ff}
-.status{padding:7px 10px;border-radius:999px;font-size:11px;font-weight:900;background:#fff0ca;color:#895600;display:inline-block}.work{padding:20px;margin-top:16px}.bar{height:8px;background:#e8edf2;border-radius:8px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:#159a59}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.modal{position:fixed;inset:0;background:#04182cdd;display:grid;place-items:center;padding:18px;z-index:20}.dialog{width:min(520px,96vw);background:#fff;border-radius:17px;padding:27px}
-.material{background:#fff4d8;border:1px solid #efd28a;border-radius:11px;padding:17px;margin:14px 0}.material b{display:block;font-size:22px}.hold{background:#b42318;color:#fff;padding:12px 18px;font-weight:800}.scan{font-size:54px;text-align:center}.master{text-align:center;padding:35px;margin-top:30px}
-.ok{background:#eaf8ef;border:1px solid #a7dfba;border-radius:12px;padding:15px;margin-top:15px;color:#17683a}
-@media(max-width:650px){.choice{grid-template-columns:1fr}header{font-size:12px}.wrap{padding:25px 14px}.row{grid-template-columns:1fr 70px}.primary,.secondary,.danger{flex:1}}
-</style>
-</head>
-<body><div id="app"></div>
+*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#102b48;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+button,input,select{font:inherit}button{cursor:pointer}header{background:#062e5d;color:#fff;padding:13px 4%;display:flex;align-items:center;gap:11px;position:sticky;top:0;z-index:4}
+.grow{flex:1}.wrap{max-width:1050px;margin:auto;padding:27px 15px}.card{background:#fff;border:1px solid #dce5ee;border-radius:16px;padding:20px;margin:14px 0;box-shadow:0 6px 22px #173b5f12}
+.login{min-height:100vh;background:linear-gradient(135deg,#062d59,#0875c9);display:grid;place-items:center;padding:20px}.login .card{width:min(430px,95vw);padding:32px}
+.ey{font-size:11px;font-weight:900;letter-spacing:1.3px;color:#1473ca}.muted{color:#6b7e91}.small{font-size:12px}
+input,select{width:100%;padding:13px;border:1px solid #cad7e4;border-radius:10px;margin:6px 0 12px}.pin{font-size:26px;text-align:center;letter-spacing:9px}
+.primary,.secondary,.danger{border:0;border-radius:10px;padding:13px 16px;font-weight:800}.primary{background:#0875df;color:#fff}.secondary{background:#eaf5ff;color:#075fae}.danger{background:#b42318;color:#fff}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.tile{padding:25px;text-align:left;border:0;border-radius:16px;color:#fff;background:#0b67c2}.tile.green{background:#087c63}.tile b{font-size:22px;display:block;margin-bottom:6px}
+.row{display:grid;grid-template-columns:1fr 80px;gap:9px;padding:15px;border-top:1px solid #edf1f5;align-items:center}.row:first-child{border-top:0}.bar{height:8px;background:#e8edf2;border-radius:8px;overflow:hidden;margin-top:7px}.bar i{display:block;height:100%;background:#159a59}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.status{display:inline-block;padding:6px 10px;border-radius:99px;background:#eaf8ef;color:#17683a;font-size:11px;font-weight:900}.warn{background:#fff1cc;color:#805b00}
+.modal{position:fixed;inset:0;background:#04182cdd;display:grid;place-items:center;padding:15px;z-index:20}.dialog{background:#fff;border-radius:16px;padding:22px;width:min(520px,96vw)}#reader{width:100%}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid #edf1f5}
+@media(max-width:650px){.grid{grid-template-columns:1fr}.actions button{flex:1}header{font-size:12px}.row{grid-template-columns:1fr 60px}}
+</style></head><body><div id="app"></div>
 <script>
-const items=[
- {name:'Maltodextrin',kg:25,qty:40,scan:0,confirmed:false},
- {name:'Skimmed Milk Powder',kg:25,qty:30,scan:0,confirmed:false},
- {name:'Whey Protein Concentrate',kg:20,qty:15,scan:0,confirmed:false},
- {name:'Vanilla Flavour',kg:5,qty:4,scan:0,confirmed:false}
-];
-let s={login:false,user:'',mode:'home',active:null,holding:false,master:false,fillOpen:false,audit:[]};
+const SB=supabase.createClient('https://uehuvtnrsktskfmmbnul.supabase.co','sb_publishable_e-D582vTrmEAqG7X18sSlg_51trSTZG');
+const DEMO={batch:'WV260930-04',product:'Whey Vanilla',spec:'WV-V3',pallet:'1/2',
+items:[{name:'Maltodextrin',kg:25,qty:40},{name:'Skimmed Milk Powder',kg:25,qty:30},{name:'Whey Protein Concentrate',kg:20,qty:15},{name:'Vanilla Flavour',kg:5,qty:4}]};
+let me=null,adminPin='',view='login',stage=null,checkNo=1,qr=null,selected=null;
+let state=JSON.parse(localStorage.getItem('bc_runtime')||'null')||{scans:{build:{1:{},2:{}},filling:{1:{},2:{}}},ops:{build:{},filling:{}},holds:[],audit:[]};
 const A=document.getElementById('app');
-function log(x){s.audit.unshift(new Date().toLocaleTimeString()+' — '+x)}
-function header(){return `<header><b>APPLIED NUTRITION</b><span>Blender Control</span><span class="grow"></span><button class="secondary" onclick="home()">Home</button></header>`}
-function render(){
- if(!s.login){
-  A.innerHTML=`<main class="login"><div class="card loginCard"><span class="ey">BLENDER CONTROL</span><h1>Operator login</h1><p class="muted">Enter your 6-digit PIN</p><input id="pin" class="pin" inputmode="numeric" maxlength="6" placeholder="••••••"><button class="primary" style="width:100%" onclick="login()">Login</button><p class="small">Prototype: use any 6 digits.</p></div></main>`; return;
- }
- if(s.mode==='home'){
-  A.innerHTML=header()+`<main class="wrap"><span class="ey">WELCOME, ${s.user.toUpperCase()}</span><h1>Select operation</h1><p class="muted">An employee may work in Build and Filling. Independent Check 1 and Check 2 within the same stage must be completed by different operators in the production version.</p>
-  <div class="choice"><button class="tile" onclick="openMode('build')"><b>Build Pallet</b><span>Prepare, label and verify ingredients</span></button><button class="tile green" onclick="openMode('fill')"><b>Filling Check</b><span>Scan the pallet and verify ingredients before filling</span></button></div>
-  <div class="card work"><b>Current batch</b><p>Whey Vanilla · WV260930-04 · Spec WV-V3 · Pallet 1/2</p><span class="status">${s.holding?'HOLDING':s.master?'READY FOR BLENDER':'ACTIVE'}</span></div></main>`; return;
- }
- if(s.mode==='fill'&&!s.fillOpen){
-  A.innerHTML=header()+`<main class="wrap"><div class="card master"><div class="scan">▦</div><span class="ey">FILLING TEAM</span><h2>Scan Pallet Master QR</h2><p class="muted">The pallet must be identified before any ingredient is scanned.</p><button class="primary" onclick="s.fillOpen=true;resetConfirmations();log('Master Pallet QR scanned');render()">Simulate Master QR Scan</button></div></main>`;return;
- }
- const stage=s.mode==='build'?'BUILD PALLET':'FILLING CHECK';
- const rows=items.map((x,i)=>`<button class="row ${s.active===i?'selected':''}" onclick="s.active=${i};render()"><div><b>${x.name}</b><span>${x.kg} kg bag · ${x.qty} required</span></div><b>${x.scan}/${x.qty}</b></button>`).join('');
- A.innerHTML=header()+(s.holding?'<div class="hold">HOLDING — supervisor intervention required</div>':'')+`<main class="wrap"><span class="ey">${stage}</span><h1>Whey Vanilla</h1><p class="muted">Batch WV260930-04 · Spec WV-V3 · Pallet 1/2</p><div class="card spec">${rows}</div>${s.active===null?'':work(items[s.active])}
- <div class="actions"><button class="secondary" onclick="switchOp()">Switch operator</button><button class="secondary" onclick="audit()">Audit trail</button>${s.mode==='build'&&!s.master?'<button class="primary" onclick="master()">Print Master Pallet Label</button>':''}</div>
- ${s.master?'<div class="ok"><b>Master Pallet Label generated.</b><br>Batch WV260930-04 is Ready for Blender.</div>':''}</main>`;
+function save(){localStorage.setItem('bc_runtime',JSON.stringify(state))}
+function log(x){state.audit.unshift(new Date().toLocaleString()+' — '+x);save()}
+function H(){return `<header><b>APPLIED NUTRITION</b><span>Blender Control</span><span class="grow"></span><span>${me?.name||''}</span><button class="secondary" onclick="home()">Home</button><button class="secondary" onclick="logout()">Logout</button></header>`}
+function R(){
+ if(view==='login'){A.innerHTML=`<main class="login"><div class="card"><span class="ey">BLENDER CONTROL</span><h1>Sign in</h1><p class="muted">Enter your 6-digit PIN</p><input id="pin" class="pin" inputmode="numeric" maxlength="6" type="password"><button class="primary" style="width:100%" onclick="login()">Login</button><p id="err" class="muted"></p></div></main>`;return}
+ if(view==='home'){A.innerHTML=H()+`<main class="wrap"><span class="ey">${me.role.toUpperCase()}</span><h1>Select operation</h1><p class="muted">${DEMO.product} · ${DEMO.batch} · ${DEMO.spec} · Pallet ${DEMO.pallet}</p><div class="grid"><button class="tile" onclick="openStage('build')"><b>Build Pallet</b>Prepare, label and independently verify ingredients</button><button class="tile green" onclick="startMaster()"><b>Filling Check</b>Scan Master Pallet QR before verification</button></div>${me.role==='admin'?`<div class="card"><h2>Administration</h2><div class="actions"><button class="primary" onclick="view='users';R()">Users</button><button class="secondary" onclick="showAudit()">Audit trail</button><button class="danger" onclick="resetDemo()">Reset demo batch</button></div></div>`:''}</main>`;return}
+ if(view==='users'){A.innerHTML=H()+`<main class="wrap"><span class="ey">ADMINISTRATION</span><h1>Users</h1><div class="card"><h2>Add employee</h2><input id="eid" placeholder="Employee ID"><input id="nm" placeholder="Full name"><input id="np" maxlength="6" inputmode="numeric" type="password" placeholder="6-digit PIN"><select id="role"><option value="operator">Operator</option><option value="supervisor">Supervisor</option><option value="admin">Admin</option></select><button class="primary" onclick="addUser()">Create user</button><p id="msg" class="muted"></p></div></main>`;return}
+ if(view==='work'){
+   const d=state.scans[stage][checkNo];
+   A.innerHTML=H()+`<main class="wrap"><span class="ey">${stage.toUpperCase()} · CHECK ${checkNo}</span><h1>${DEMO.product}</h1><p class="muted">Batch ${DEMO.batch} · ${DEMO.spec} · Pallet ${DEMO.pallet}</p><span class="status">INDEPENDENT CHECK</span>
+   <div class="card">${DEMO.items.map((x,i)=>{let n=(d[i]||[]).length,p=Math.min(100,100*n/x.qty);return `<div class="row"><div><b>${x.name}</b><div class="muted">${x.kg} kg · ${x.qty} required</div><div class="bar"><i style="width:${p}%"></i></div><div class="actions"><button class="primary" onclick="scanBag(${i})">Scan QR</button>${stage==='build'?`<button class="secondary" onclick="labels(${i})">Print ${x.qty} labels</button>`:''}</div></div><b>${n}/${x.qty}</b></div>`}).join('')}</div>
+   <div class="actions"><button class="primary" onclick="completeCheck()">Complete Check ${checkNo}</button><button class="danger" onclick="reportHold()">Report discrepancy</button><button class="secondary" onclick="showAudit()">Audit</button></div></main>`;return}
 }
-function work(x){
- const p=Math.round(x.scan/x.qty*100);
- return `<div class="card work"><span class="ey">INGREDIENT VERIFICATION</span><h2>${x.name}</h2><p>${x.kg} kg · ${x.qty} bags required</p><div class="bar"><i style="width:${p}%"></i></div><b>${x.scan} / ${x.qty} scanned</b><div class="actions">${s.mode==='build'?`<button class="secondary" onclick="printLabels()">Print ${x.qty} Labels</button>`:''}<button class="primary" onclick="scan()">Scan Next QR</button><button class="danger" onclick="hold('discrepancy on ${x.name}')">Report discrepancy</button></div></div>`;
+async function login(){
+ const p=document.getElementById('pin').value.replace(/\D/g,''); if(p.length!==6)return err('Enter 6 digits.');
+ const {data,error}=await SB.rpc('login_pin',{p_pin:p});
+ if(error||!data?.length)return err('Invalid or inactive PIN.');
+ me=data[0]; if(me.role==='admin')adminPin=p; log(me.name+' signed in'); view='home';R()
 }
-function login(){const p=document.getElementById('pin').value.replace(/\D/g,'');if(p.length!==6)return alert('Enter 6 digits');s.login=true;s.user='Operator '+p.slice(-4);log(s.user+' logged in');render()}
-function home(){s.mode='home';s.active=null;render()}
-function openMode(m){s.mode=m;s.active=null;if(m==='fill')s.fillOpen=false;resetConfirmations();log(s.user+' opened '+m);render()}
-function resetConfirmations(){items.forEach(x=>x.confirmed=false)}
-function scan(){const x=items[s.active];if(!x.confirmed)return confirmMat(x);if(x.scan<x.qty){x.scan++;log(x.name+' '+x.scan+'/'+x.qty+' scanned');render()}else alert('All required bags have already been scanned.')}
-function confirmMat(x){A.insertAdjacentHTML('beforeend',`<div class="modal"><div class="dialog"><span class="ey">FIRST SCAN</span><h2>Confirm material</h2><p>Does the physical product and bag weight match the system?</p><div class="material"><b>${x.name}</b><strong>${x.kg} kg</strong></div><div class="actions"><button class="primary" onclick="okMat()">✓ Confirm</button><button class="danger" onclick="badMat()">✕ Does Not Match</button></div></div></div>`)}
-function okMat(){const x=items[s.active];x.confirmed=true;if(x.scan===0)x.scan=1;log('First bag confirmed: '+x.name+' '+x.kg+' kg');render()}
-function badMat(){hold('material/weight mismatch')}
-function hold(reason){s.holding=true;log('HOLDING: '+reason);render()}
-function switchOp(){const p=prompt('Enter next operator 6-digit PIN');if(!p||p.replace(/\D/g,'').length!==6)return;s.user='Operator '+p.replace(/\D/g,'').slice(-4);resetConfirmations();log('Operator switched to '+s.user);render()}
-function printLabels(){const x=items[s.active];log(x.qty+' labels printed for '+x.name);alert(`Zebra preview\n${x.name}\n${x.kg} kg\nLabels 01/${x.qty} to ${x.qty}/${x.qty}\nBatch WV260930-04`)}
-function master(){if(s.holding)return alert('Master label blocked: pallet is HOLDING.');if(items.some(x=>x.scan<x.qty))return alert('Master label blocked: ingredient scans are incomplete.');s.master=true;log('Master Pallet Label generated');render()}
-function audit(){alert(s.audit.length?s.audit.join('\n'):'No audit events yet.')}
-render();
+function err(x){document.getElementById('err').textContent=x}
+function logout(){if(me)log(me.name+' signed out');me=null;adminPin='';view='login';R()}
+function home(){view='home';stage=null;selected=null;R()}
+function openStage(x){stage=x;checkNo=state.ops[x][1]?2:1;if(checkNo===2&&state.ops[x][1]===me.id){alert('Check 2 must be completed by a different operator.');return}view='work';log(me.name+' opened '+x+' Check '+checkNo);R()}
+async function addUser(){
+ const eid=document.getElementById('eid').value.trim(),nm=document.getElementById('nm').value.trim(),np=document.getElementById('np').value,role=document.getElementById('role').value,msg=document.getElementById('msg');
+ if(!eid||!nm||!/^\d{6}$/.test(np)){msg.textContent='Complete all fields. PIN must contain 6 digits.';return}
+ const {error}=await SB.rpc('admin_create_user',{p_admin:me.id,p_pin:adminPin,p_employee_id:eid,p_name:nm,p_new_pin:np,p_role:role});
+ msg.textContent=error?'Could not create user: '+error.message:'User created successfully.';
+ if(!error){log('Admin created employee '+eid+' ('+role+')');document.getElementById('eid').value='';document.getElementById('nm').value='';document.getElementById('np').value=''}
+}
+function startMaster(){stage='filling';camera('master',null)}
+function scanBag(i){selected=i;camera('bag',i)}
+function camera(kind,i){
+ document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="cam"><div class="dialog"><span class="ey">QR SCANNER</span><h2>${kind==='master'?'Scan Pallet Master QR':'Scan Bag QR'}</h2><p class="muted">Point the rear camera at the label.</p><div id="reader"></div><div class="actions"><button class="secondary" onclick="stopCam()">Cancel</button></div></div></div>`);
+ qr=new Html5Qrcode('reader');qr.start({facingMode:'environment'},{fps:10,qrbox:{width:230,height:230}},t=>gotQR(kind,i,t),()=>{}).catch(()=>{alert('Camera could not start. Allow camera access for this website in Safari/browser settings.');stopCam()})
+}
+function stopCam(){const done=()=>document.getElementById('cam')?.remove();if(qr){try{qr.stop().then(done).catch(done)}catch(e){done()}}else done();qr=null}
+function norm(x){return String(x).toUpperCase().replace(/[^A-Z0-9]/g,'')}
+function gotQR(kind,i,t){
+ if(kind==='master'){if(t!==`AN|MASTER|${DEMO.batch}`)return;stopCam();openStage('filling');return}
+ const x=DEMO.items[i],a=t.trim().split('|');if(a.length<7||a[0]!=='AN'||a[1]!=='BAG'||a[2]!==DEMO.batch||norm(a[3])!==norm(x.name))return;
+ const seq=+a[4],total=+a[5],kg=+a[6];if(total!==x.qty||kg!==x.kg||seq<1||seq>x.qty){stopCam();hold('QR/specification mismatch: '+x.name);return}
+ const arr=state.scans[stage][checkNo][i]||[];if(arr.includes(seq)){stopCam();alert('This bag has already been scanned in this check.');return}
+ stopCam();
+ if(seq===1&&!confirm(`CONFIRM MATERIAL\n\n${x.name}\n${x.kg} kg\n\nDoes the physical product and bag weight match?`)){hold('Material/weight rejected: '+x.name);return}
+ state.scans[stage][checkNo][i]=[...arr,seq];log(`${stage} Check ${checkNo}: ${x.name} ${seq}/${x.qty} scanned by ${me.name}`);R()
+}
+function completeCheck(){
+ const d=state.scans[stage][checkNo],missing=DEMO.items.filter((x,i)=>(d[i]||[]).length!==x.qty);
+ if(missing.length){hold('Incomplete scan: '+missing.map(x=>x.name).join(', '));return}
+ if(checkNo===1){state.ops[stage][1]=me.id;log(`${stage} Check 1 completed by ${me.name}`);save();alert('Check 1 complete. Check 2 must be completed by a DIFFERENT operator.');logout();return}
+ if(state.ops[stage][1]===me.id){alert('Check 2 must be completed by a different operator.');return}
+ state.ops[stage][2]=me.id;log(`${stage} Check 2 completed by ${me.name}`);save();
+ if(stage==='build'){alert('Build complete. Master Pallet label is ready to print.');printMaster()}else alert('Filling verification complete.');
+ view='home';R()
+}
+function hold(reason){state.holds.push({stage,checkNo,reason,user:me?.name,time:new Date().toISOString(),resolved:false});log('HOLDING: '+reason);alert('HOLDING — '+reason+'. Supervisor intervention required.')}
+function reportHold(){const r=prompt('Describe the discrepancy');if(r)hold(r)}
+function labels(i){
+ const x=DEMO.items[i],w=window.open('','_blank');if(!w)return alert('Allow pop-ups for label printing.');
+ let h=`<html><head><style>@page{size:70mm 50mm;margin:0}body{margin:0;font-family:Arial}.l{width:70mm;height:50mm;padding:4mm;page-break-after:always;display:flex;gap:3mm;align-items:center}.q{width:28mm}.t b{font-size:14pt;display:block}</style><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script></head><body>`;
+ for(let n=1;n<=x.qty;n++)h+=`<div class="l"><div class="q" id="q${n}"></div><div class="t"><b>${x.name}</b>${x.kg} kg<br>${String(n).padStart(2,'0')}/${x.qty}<br>${DEMO.batch}</div></div>`;
+ h+=`<script>window.onload=()=>{${Array.from({length:x.qty},(_,j)=>`new QRCode(document.getElementById('q${j+1}'),{text:'AN|BAG|${DEMO.batch}|${x.name.toUpperCase()}|${j+1}|${x.qty}|${x.kg}',width:106,height:106});`).join('')}setTimeout(()=>window.print(),700)}<\/script></body></html>`;w.document.write(h);w.document.close();log(`${x.qty} labels generated: ${x.name}`)
+}
+function printMaster(){
+ const w=window.open('','_blank');if(!w)return alert('Allow pop-ups for printing.');
+ w.document.write(`<html><head><style>@page{size:70mm 50mm;margin:0}body{text-align:center;font-family:Arial;padding:4mm}#q{width:28mm;margin:auto}</style><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script></head><body><h2>${DEMO.product}</h2><b>MASTER PALLET</b><div>${DEMO.batch}</div><div id="q"></div><script>new QRCode(document.getElementById('q'),{text:'AN|MASTER|${DEMO.batch}',width:106,height:106});setTimeout(()=>window.print(),600)<\/script></body></html>`);w.document.close()
+}
+function showAudit(){alert(state.audit.length?state.audit.join('\n'):'No audit events yet.')}
+function resetDemo(){if(!confirm('Reset all demo scans/checks on this device?'))return;localStorage.removeItem('bc_runtime');location.reload()}
+R();
 </script></body></html>
