@@ -60,20 +60,42 @@ function ensureRuntimeState(){
  if(!Array.isArray(state.holds))state.holds=[]; if(!Array.isArray(state.audit))state.audit=[];
  if(!state.qualityByBlender)state.qualityByBlender={}; if(!state.blenderHistory)state.blenderHistory={};
  if(!state.blenderCompleted)state.blenderCompleted={};
+ if(!state.recipeOverrides)state.recipeOverrides={};
 }
 ensureRuntimeState();
 function save(){localStorage.setItem('bc_runtime',JSON.stringify(state))}
 function log(x){state.audit.unshift(new Date().toLocaleString()+' — '+x);save()}
 function H(){return `<header><b>APPLIED NUTRITION</b><span>Blender Control</span><span class="grow"></span><span>${me?.name||''}</span><button class="secondary" onclick="home()">Home</button><button class="secondary" onclick="logout()">Logout</button></header>`}
+function resetDemo(){
+ if(!confirm('Reset demo batch? This clears demo operational progress, scans, holds, blender status/history and Filling preparation. Users and login are preserved.'))return;
+ state.scans={build:{1:{},2:{}},filling:{1:{},2:{}}};
+ state.ops={build:{},filling:{}};
+ state.holds=[];
+ state.audit=[];
+ state.quality={status:'waiting'};
+ state.qualityByBlender={};
+ state.blenderQueueIndex={};
+ state.blenderCompleted={};
+ state.blenderHistory={};
+ state.recipeOverrides={};
+ state.autoClose={};
+ state.fillingPrep={checklist:false,knifeOut:false,knifeIn:false};
+ state.currentFillingBlender=null;
+ state.activeBuildBatch=null;
+ state.activeFillingBatch=null;
+ save();
+ alert('Demo batch reset. Filling Check is ready for a new Blender QR.');
+ R();
+}
 function R(){
  if(view==='login'){A.innerHTML=`<main class="login"><div class="card"><span class="ey">BLENDER CONTROL</span><h1>Sign in</h1><p class="muted">Enter your 6-digit PIN</p><input id="pin" class="pin" inputmode="numeric" maxlength="6" type="password"><button class="primary" style="width:100%" onclick="login()">Login</button><p id="err" class="muted"></p></div></main>`;return}
- if(view==='home'){A.innerHTML=H()+`<main class="wrap"><span class="ey">${me.role.toUpperCase()}</span><h1>Select operation</h1><div class="grid">${me.role!=='quality'?`<button class="tile" onclick="showBuildProducts()"><b>Build Blender</b>Choose a recipe (Spec), prepare, label and verify ingredients</button>`:''}${['operator','supervisor','admin'].includes(me.role)?`<button class="tile green" onclick="fillingHub()"><b>Filling Check</b>Checklist · Knife Control · Pallet Verification</button>`:''}${(me.role==='quality'||me.role==='admin')?`<button class="tile" style="background:#7656a8" onclick="qualityBlenderScanner()"><b>Blender Release</b>Scan Blender QR, view its production queue and release or hold</button>`:''}</div>${me.role==='admin'?`<div class="card"><h2>Administration</h2><div class="actions"><button class="primary" onclick="view='users';R()">Users</button><button class="secondary" onclick="showAudit()">Audit trail</button><button class="danger" onclick="resetDemo()">Reset demo batch</button></div></div>`:''}</main>`;return}
+ if(view==='home'){A.innerHTML=H()+`<main class="wrap"><span class="ey">${me.role.toUpperCase()}</span><h1>Select operation</h1><div class="grid">${me.role!=='quality'?`<button class="tile" onclick="showBuildProducts()"><b>Build Blender</b>Choose a recipe (Spec), prepare, label and verify ingredients</button>`:''}${['operator','supervisor','admin'].includes(me.role)?`<button class="tile green" onclick="fillingHub()"><b>Filling Check</b>Checklist · Knife Control · Pallet Verification</button>`:''}${(me.role==='quality'||me.role==='admin')?`<button class="tile" style="background:#7656a8" onclick="qualityBlenderScanner()"><b>Blender Release</b>Scan Blender QR, view its production queue and release or hold</button>`:''}</div>${me.role==='supervisor'?`<div class="card"><h2>Supervisor Tools</h2><p class="muted">You can edit batch recipes, ingredients, quantities, Batch Code, production line and assigned Blender from Build Blender → recipe list. Every change requires a reason and is recorded in Audit.</p></div>`:''}${me.role==='admin'?`<div class="card"><h2>Administration</h2><div class="actions"><button class="primary" onclick="view='users';R()">Users</button><button class="secondary" onclick="showAudit()">Audit trail</button><button class="danger" onclick="resetDemo()">Reset demo batch</button></div></div>`:''}</main>`;return}
  if(view==='buildLines'){
  const lines=['Line 1','Line 2','Line 3','Line 4','Line 5','Line 6','Capsule Line','Gel Line','Tablet Line'];
  A.innerHTML=H()+`<main><button class="secondary" onclick="view='home';R()">← Back</button><span class="ey">BLENDER TEAM</span><h1>Select line</h1><p class="muted">Choose the production line to see its recipes / Specs.</p><div class="card"><h2>Production lines</h2>${lines.map((l,i)=>`<button class="tile" style="width:100%;text-align:left;margin:10px 0;background:${i<6?'#1475c9':'#0b7f67'}" onclick="openRecipeLine('${l}')"><b>${l}</b><span style="display:block;font-size:.82em;margin-top:7px">${PRODUCT_CATALOG.filter(x=>x.line===l).length} recipe(s)</span></button>`).join('')}</div></main>`;return}
  if(view==='buildProducts'){
  const recipes=PRODUCT_CATALOG.filter(x=>x.line===selectedLine);
- A.innerHTML=H()+`<main><button class="secondary" onclick="view='buildLines';R()">← Back to lines</button><span class="ey">BLENDER TEAM · ${selectedLine}</span><h1>Select recipe</h1><p class="muted">Choose a recipe (Spec) for ${selectedLine}.</p><div class="card"><h2>${selectedLine} — Recipes / Specs</h2>${recipes.map(x=>{const i=PRODUCT_CATALOG.indexOf(x);return `<button class="tile" style="width:100%;text-align:left;margin:10px 0;background:#1475c9" onclick="selectBuildProduct(${i})"><b>${x.product}</b><span style="display:block;font-size:.82em;margin-top:7px">Spec ${x.spec} · ${x.status}</span></button>`}).join('')}</div><button class="secondary" onclick="view='buildLines';R()">← Back to lines</button></main>`;return}
+ A.innerHTML=H()+`<main><button class="secondary" onclick="view='buildLines';R()">← Back to lines</button><span class="ey">BLENDER TEAM · ${selectedLine}</span><h1>Select recipe</h1><p class="muted">Choose a recipe (Spec) for ${selectedLine}.</p><div class="card"><h2>${selectedLine} — Recipes / Specs</h2>${recipes.map(x=>{const i=PRODUCT_CATALOG.indexOf(x),e=effectiveRecipe(x);return `<div class="card"><button class="tile" style="width:100%;text-align:left;margin:0;background:#1475c9" onclick="selectBuildProduct(${i})"><b>${e.product}</b><span style="display:block;font-size:.82em;margin-top:7px">Batch ${e.batch} · Spec ${e.spec}${e.blender?' · '+BLENDERS[e.blender].name:''}</span></button>${['supervisor','admin'].includes(me.role)?`<button class="secondary" style="width:100%;margin-top:8px" onclick="editRecipe(${i})">Edit Recipe / Batch</button>`:''}</div>`}).join('')}</div><button class="secondary" onclick="view='buildLines';R()">← Back to lines</button></main>`;return}
  if(view==='users'){A.innerHTML=H()+`<main class="wrap"><span class="ey">ADMINISTRATION</span><h1>Users</h1><div class="card"><h2>Registered users</h2><div id="userlist"><p class="muted">Loading users...</p></div></div><div class="card"><h2>Add employee</h2><p class="muted">User ID is generated automatically (AN0001, AN0002...)</p><input id="nm" placeholder="Full name"><input id="np" maxlength="6" inputmode="numeric" type="password" placeholder="6-digit PIN"><select id="role"><option value="operator">Operator</option><option value="supervisor">Supervisor</option><option value="quality">Quality</option><option value="admin">Admin</option></select><button class="primary" onclick="addUser()">Create user</button><p id="msg" class="muted"></p></div></main>`;loadUsers();return}
  if(view==='work'){
    const d=state.scans[stage][checkNo];
@@ -237,11 +259,55 @@ const PRODUCT_CATALOG=[
  {line:'Tablet Line',product:'Tablet Formula 1',batch:'TAB-261001',spec:'TAB-V1',pallet:'1/1',status:'Active'}
 ];
 let selectedLine=null;
+
+function effectiveRecipe(x){
+ const o=state.recipeOverrides?.[x.batch];
+ return o?{...x,...o,items:(o.items||DEMO.items).map(v=>({...v}))}:{...x,items:DEMO.items.map(v=>({...v}))};
+}
+function editRecipe(i){
+ if(!['supervisor','admin'].includes(me.role))return alert('Supervisor or Admin access required.');
+ const base=PRODUCT_CATALOG[i],x=effectiveRecipe(base);
+ document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="redit"><div class="dialog">
+ <span class="ey">SUPERVISOR / ADMIN</span><h2>Edit Batch Recipe</h2>
+ <p class="muted">Changes apply to this batch only and are recorded in the Audit trail.</p>
+ <label>Product</label><input id="erProduct" value="${x.product}">
+ <label>Batch code</label><input id="erBatch" value="${x.batch}">
+ <label>Spec</label><input id="erSpec" value="${x.spec}">
+ <label>Production line</label><select id="erLine">${['Line 1','Line 2','Line 3','Line 4','Line 5','Line 6','Capsule Line','Gel Line','Tablet Line'].map(v=>`<option ${v===x.line?'selected':''}>${v}</option>`).join('')}</select>
+ <label>Assigned blender</label><select id="erBlender"><option value="">Not assigned</option>${Object.keys(BLENDERS).map(c=>`<option value="${c}" ${x.blender===c?'selected':''}>${BLENDERS[c].name}</option>`).join('')}</select>
+ <h3>Ingredients</h3><div id="erItems">${x.items.map((v,n)=>recipeItemRow(v,n)).join('')}</div>
+ <button class="secondary" onclick="addRecipeItemRow()">+ Add ingredient</button>
+ <label>Reason for change</label><input id="erReason" placeholder="Required">
+ <div class="actions"><button class="primary" onclick="saveRecipeEdit(${i})">Save changes</button><button class="secondary" onclick="document.getElementById('redit').remove()">Cancel</button></div>
+ </div></div>`);
+}
+function recipeItemRow(v,n){
+ return `<div class="card erItem"><div class="actions"><b>Ingredient ${n+1}</b><button class="danger" onclick="this.closest('.erItem').remove()">Remove</button></div>
+ <input class="eriName" placeholder="Ingredient name" value="${v.name||''}">
+ <div class="grid"><div><label>Bag weight (kg)</label><input class="eriKg" type="number" min="0" step="0.01" value="${v.kg??''}"></div><div><label>Quantity</label><input class="eriQty" type="number" min="1" step="1" value="${v.qty??1}"></div></div></div>`;
+}
+function addRecipeItemRow(){document.getElementById('erItems').insertAdjacentHTML('beforeend',recipeItemRow({name:'',kg:'',qty:1},document.querySelectorAll('#erItems .erItem').length))}
+function saveRecipeEdit(i){
+ if(!['supervisor','admin'].includes(me.role))return alert('Supervisor or Admin access required.');
+ const base=PRODUCT_CATALOG[i],old=effectiveRecipe(base),reason=document.getElementById('erReason').value.trim();
+ if(!reason)return alert('Reason for change is required.');
+ const batch=document.getElementById('erBatch').value.trim(),product=document.getElementById('erProduct').value.trim(),spec=document.getElementById('erSpec').value.trim();
+ if(!batch||!product||!spec)return alert('Product, Batch code and Spec are required.');
+ const items=[...document.querySelectorAll('#erItems .erItem')].map(r=>({name:r.querySelector('.eriName').value.trim(),kg:Number(r.querySelector('.eriKg').value),qty:Number(r.querySelector('.eriQty').value)}));
+ if(!items.length||items.some(v=>!v.name||!(v.kg>0)||!Number.isInteger(v.qty)||v.qty<1))return alert('Check every ingredient, bag weight and quantity.');
+ const edited={product,batch,spec,line:document.getElementById('erLine').value,blender:document.getElementById('erBlender').value||null,pallet:old.pallet,status:old.status,items};
+ if(!state.recipeOverrides)state.recipeOverrides={};
+ // Keep the override keyed by the catalogue batch so the recipe remains discoverable even if Batch Code changes.
+ state.recipeOverrides[base.batch]=edited;
+ log(`BATCH RECIPE EDIT — ${old.product} / ${old.batch} → ${edited.product} / ${edited.batch}; line ${old.line} → ${edited.line}; blender ${old.blender||'unassigned'} → ${edited.blender||'unassigned'}; ingredients ${old.items.length} → ${edited.items.length}; by ${me.employee_id} ${me.name}; reason: ${reason}`);
+ save();document.getElementById('redit')?.remove();R();
+}
 function showBuildProducts(){ selectedLine=null; view='buildLines';R(); }
 function openRecipeLine(line){ selectedLine=line; view='buildProducts';R(); }
 function selectBuildProduct(i){
- const x=PRODUCT_CATALOG[i];
- DEMO.product=x.product;DEMO.batch=x.batch;DEMO.spec=x.spec;DEMO.pallet=x.pallet;
+ const x=effectiveRecipe(PRODUCT_CATALOG[i]);
+ DEMO.product=x.product;DEMO.batch=x.batch;DEMO.spec=x.spec;DEMO.pallet=x.pallet;DEMO.items=x.items.map(v=>({...v}));
+ state.currentBuildBlender=x.blender||null;
  if(state.activeBuildBatch!==DEMO.batch){
    state.scans.build={1:{},2:{}}; state.ops.build={}; state.activeBuildBatch=DEMO.batch; save();
  }
@@ -334,7 +400,8 @@ function processAutoClose(code){
  const release=state.qualityByBlender?.[code]||{};
  state.blenderHistory[code].unshift({product:x.product,status:'completed',releasedBy:release.by||null,releasedById:release.id||null,filledBy:x.filler,filledById:x.fillerId,knifeInAt:x.knifeInAt,completedAt:new Date().toISOString()});
  if(!state.blenderQueueIndex)state.blenderQueueIndex={};
- if(!state.blenderCompleted)state.blenderCompleted={}; if(!state.blenderCompleted[code])state.blenderCompleted[code]=[];
+ if(!state.blenderCompleted)state.blenderCompleted={};
+ if(!state.recipeOverrides)state.recipeOverrides={}; if(!state.blenderCompleted[code])state.blenderCompleted[code]=[];
  if(!state.blenderCompleted[code].includes(x.product))state.blenderCompleted[code].push(x.product);
  const blender=BLENDERS[code];
  let nextIdx=0;
