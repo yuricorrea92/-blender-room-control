@@ -57,7 +57,7 @@ function log(x){state.audit.unshift(new Date().toLocaleString()+' — '+x);save(
 function H(){return `<header><b>APPLIED NUTRITION</b><span>Blender Control</span><span class="grow"></span><span>${me?.name||''}</span><button class="secondary" onclick="home()">Home</button><button class="secondary" onclick="logout()">Logout</button></header>`}
 function R(){
  if(view==='login'){A.innerHTML=`<main class="login"><div class="card"><span class="ey">BLENDER CONTROL</span><h1>Sign in</h1><p class="muted">Enter your 6-digit PIN</p><input id="pin" class="pin" inputmode="numeric" maxlength="6" type="password"><button class="primary" style="width:100%" onclick="login()">Login</button><p id="err" class="muted"></p></div></main>`;return}
- if(view==='home'){A.innerHTML=H()+`<main class="wrap"><span class="ey">${me.role.toUpperCase()}</span><h1>Select operation</h1><p class="muted">${DEMO.product} · ${DEMO.batch} · ${DEMO.spec} · Pallet ${DEMO.pallet}</p><div class="grid">${me.role!=='quality'?`<button class="tile" onclick="showBuildProducts()"><b>Build Blender</b>Choose a recipe (Spec), prepare, label and verify ingredients</button>`:''}${me.role!=='quality'?`<button class="tile green" onclick="fillingHub()"><b>Filling Check</b>Checklist · Knife Control · Pallet Verification</button>`:''}${(me.role==='quality'||me.role==='admin')?`<button class="tile" style="background:#7656a8" onclick="qualityBlenderScanner()"><b>Blender Release</b>Scan Blender QR, view its production queue and release or hold</button>`:''}</div>${me.role==='admin'?`<div class="card"><h2>Administration</h2><div class="actions"><button class="primary" onclick="view='users';R()">Users</button><button class="secondary" onclick="showAudit()">Audit trail</button><button class="danger" onclick="resetDemo()">Reset demo batch</button></div></div>`:''}</main>`;return}
+ if(view==='home'){A.innerHTML=H()+`<main class="wrap"><span class="ey">${me.role.toUpperCase()}</span><h1>Select operation</h1><div class="grid">${me.role!=='quality'?`<button class="tile" onclick="showBuildProducts()"><b>Build Blender</b>Choose a recipe (Spec), prepare, label and verify ingredients</button>`:''}${me.role!=='quality'?`<button class="tile green" onclick="fillingHub()"><b>Filling Check</b>Checklist · Knife Control · Pallet Verification</button>`:''}${(me.role==='quality'||me.role==='admin')?`<button class="tile" style="background:#7656a8" onclick="qualityBlenderScanner()"><b>Blender Release</b>Scan Blender QR, view its production queue and release or hold</button>`:''}</div>${me.role==='admin'?`<div class="card"><h2>Administration</h2><div class="actions"><button class="primary" onclick="view='users';R()">Users</button><button class="secondary" onclick="showAudit()">Audit trail</button><button class="danger" onclick="resetDemo()">Reset demo batch</button></div></div>`:''}</main>`;return}
  if(view==='buildLines'){
  const lines=['Line 1','Line 2','Line 3','Line 4','Line 5','Line 6','Capsule Line','Gel Line','Tablet Line'];
  A.innerHTML=H()+`<main><button class="secondary" onclick="view='home';R()">← Back</button><span class="ey">BLENDER TEAM</span><h1>Select line</h1><p class="muted">Choose the production line to see its recipes / Specs.</p><div class="card"><h2>Production lines</h2>${lines.map((l,i)=>`<button class="tile" style="width:100%;text-align:left;margin:10px 0;background:${i<6?'#1475c9':'#0b7f67'}" onclick="openRecipeLine('${l}')"><b>${l}</b><span style="display:block;font-size:.82em;margin-top:7px">${PRODUCT_CATALOG.filter(x=>x.line===l).length} recipe(s)</span></button>`).join('')}</div></main>`;return}
@@ -117,7 +117,7 @@ function completeCheck(){
  if(checkNo===1){state.ops[stage][1]=me.id;log(`${stage} Check 1 completed by ${me.name}`);save();alert('Check 1 complete. Check 2 must be completed by a DIFFERENT operator.');logout();return}
  if(state.ops[stage][1]===me.id){alert('Check 2 must be completed by a different operator.');return}
  state.ops[stage][2]=me.id;log(`${stage} Check 2 completed by ${me.name}`);save();
- if(stage==='build'){alert('Build complete. Master Pallet label is ready to print.');printMaster() }else {save();alert((state.quality&&state.quality.status==='released')?'Filling verification complete. BLENDER RELEASED — READY TO FILL.':'Filling verification complete. Blender Release is still required before filling.');}
+ if(stage==='build'){alert('Build complete. Master Pallet label is ready to print.');printMaster() }else {save();const bc=state.currentFillingBlender||'BLENDER-1';const br=state.qualityByBlender?.[bc];alert(br&&br.status==='released'?'Filling verification complete. BLENDER RELEASED — READY TO FILL.':'Filling verification complete. This blender is NOT RELEASED — DO NOT START FILLING.');}
  view='home';R()
 }
 function hold(reason){state.holds.push({stage,checkNo,reason,user:me?.name,time:new Date().toISOString(),resolved:false});log('HOLDING: '+reason);alert('HOLDING — '+reason+'. Supervisor intervention required.')}
@@ -221,21 +221,81 @@ function selectBuildProduct(i){
  openStage('build');
 }
 
-function blenderStatusForFillers(){
- const q=state.quality||{status:'waiting'};
+function blenderStatusForFillers(code){
+ const q=state.qualityByBlender?.[code]||{status:'waiting'}; const qi=(state.blenderQueueIndex&&state.blenderQueueIndex[code])||0; const queue=b.queue.slice(qi);
  if(q.status==='released') return `<span class="status">BLENDER RELEASED ✓</span><p><b>Released for use</b></p><p class="muted">${q.id||''} ${q.by||''}${q.time?'<br>'+new Date(q.time).toLocaleString():''}</p>`;
  if(q.status==='hold') return `<span class="status warn">BLENDER HOLD</span><p><b>DO NOT USE BLENDER</b></p><p class="muted">${q.reason||'Contact Quality.'}</p>`;
- return `<span class="status warn">NOT RELEASED</span><p><b>Blender awaiting Quality release</b></p>`;
+ return `<span class="status warn">NOT RELEASED</span><p><b>Awaiting Quality release</b></p>`;
 }
-function fillingHub(){ensureFillingPrep();document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="fhub"><div class="dialog"><span class="ey">FILLING TEAM</span><h2>Choose an operation</h2>
- <div class="card" style="border-width:2px"><h3>Blender Status</h3>${blenderStatusForFillers()}</div>
- <p class="muted">Checklist, Knife Control and pallet verification are independent. Blender Release is shown here as a separate status.</p><div class="card"><h3>Filler Checklist</h3><button class="primary" onclick="document.getElementById('fhub').remove();openFillerChecklist()">Open Checklist</button></div><div class="card"><h3>Knife Control</h3><div class="actions"><button class="primary" onclick="document.getElementById('fhub').remove();knifeQR('in')">Knife In</button><button class="secondary" onclick="document.getElementById('fhub').remove();knifeQR('out')">Knife Out</button></div></div><div class="card"><h3>Pallet Verification</h3><button class="primary" onclick="document.getElementById('fhub').remove();startMaster()">Scan Master Pallet QR</button></div><button class="secondary" onclick="document.getElementById('fhub').remove()">Close</button></div></div>`)}
-function ensureFillingPrep(){if(!state.fillingPrep)state.fillingPrep={checklist:false,knifeIn:false,knifeOut:false,knifeInAt:null,knifeOutAt:null}}
-function fillingPrep(){ensureFillingPrep();document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="fprep"><div class="dialog"><span class="ey">FILLERS · PRE-FILL</span><h2>Before pallet verification</h2><div class="card"><h3>Checklist</h3><p>${state.fillingPrep.checklist?'✓ Completed':'Required'}</p><button class="primary" onclick="openFillerChecklist()">Open Checklist</button></div><div class="card"><h3>Knife Control</h3><p>Knife In: ${state.fillingPrep.knifeIn?'✓ Recorded':'Required'}</p><button class="primary" onclick="knifeQR('in')">Knife In · Scan QR</button><p>Knife Out: ${state.fillingPrep.knifeOut?'✓ Recorded':'Pending'}</p><button class="secondary" onclick="knifeQR('out')">Knife Out · Scan QR</button></div><div class="actions"><button class="primary" onclick="continueFilling()">Continue to Master QR</button><button class="secondary" onclick="document.getElementById('fprep').remove()">Close</button></div></div></div>`)}
+function selectFillingBlender(code){
+ state.currentFillingBlender=code; save();
+ document.getElementById('fhub')?.remove(); fillingHub();
+}
+function finishBlenderRun(code){
+ if(!confirm(`Finish the current run on ${BLENDERS[code].name}?\n\nThe blender will be locked in the system until Quality releases it again.`)) return;
+ if(!state.qualityByBlender) state.qualityByBlender={};
+ if(!state.blenderQueueIndex) state.blenderQueueIndex={};
+ state.blenderQueueIndex[code]=(state.blenderQueueIndex[code]||0)+1;
+ state.qualityByBlender[code]={status:'waiting',reason:'Previous run completed — awaiting new Quality release',by:null,id:null,time:new Date().toISOString()};
+ save(); log(`${code} RUN COMPLETE — LOCKED awaiting Quality release by ${me.name}`);
+ document.getElementById('fhub')?.remove(); fillingHub();
+}
+function fillingHub(){
+ processDueAutoCloses(); ensureFillingPrep();
+ if(!state.currentFillingBlender) state.currentFillingBlender='BLENDER-1';
+ const code=state.currentFillingBlender, b=BLENDERS[code];
+ const qidx=(state.blenderQueueIndex&&state.blenderQueueIndex[code])||0;
+ const currentProduct=b.queue[qidx]||'Queue complete';
+ document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="fhub"><div class="dialog"><span class="ey">FILLING TEAM</span><h2>Choose an operation</h2>
+ <div class="card"><h3>Select Blender</h3><div class="actions">${Object.keys(BLENDERS).map(c=>`<button class="${c===code?'primary':'secondary'}" onclick="selectFillingBlender('${c}')">${BLENDERS[c].name}</button>`).join('')}</div></div>
+ <div class="card" style="border-width:2px"><h3>${b.name} Status</h3>${blenderStatusForFillers(code)}<p><b>Current / next product:</b> ${currentProduct}</p>
+ ${state.autoClose?.[code]?`<p><b>Cycle finishing:</b> Knife In recorded. Automatic reset to NOT RELEASED at ${new Date(state.autoClose[code].due).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}.</p>`:''}
+ ${state.blenderHistory?.[code]?.length?`<hr><h4>Previous runs</h4>${state.blenderHistory[code].slice(0,3).map(h=>`<p><b>${h.product}</b> · COMPLETED<br><span class="muted">Released by ${h.releasedById||''} ${h.releasedBy||'—'} · Filled by ${h.filledById||''} ${h.filledBy||'—'}<br>${new Date(h.completedAt).toLocaleString()}</span></p>`).join('')}`:''}</div>
+ <p class="muted">Checklist, Knife Control and pallet verification are independent. Quality release controls whether this blender is available for the next run.</p>
+ <div class="card"><h3>Filler Checklist</h3><button class="primary" onclick="document.getElementById('fhub').remove();openFillerChecklist()">Open Checklist</button></div>
+ <div class="card"><h3>Knife Control</h3><div class="actions"><button class="primary" onclick="document.getElementById('fhub').remove();knifeQR('in')">Knife In · Return</button><button class="secondary" onclick="document.getElementById('fhub').remove();knifeQR('out')">Knife Out · Remove</button></div></div>
+ <div class="card"><h3>Pallet Verification</h3><button class="primary" onclick="document.getElementById('fhub').remove();startMaster()">Scan Master Pallet QR</button></div>
+ <div class="card"><h3>End Current Run</h3><p class="muted">When this product is finished, lock the blender until the next Quality release.</p><button class="danger" onclick="finishBlenderRun('${code}')">Finish Product & Lock Blender</button></div>
+ <button class="secondary" onclick="document.getElementById('fhub').remove()">Close</button></div></div>`);
+}
 function openFillerChecklist(){document.getElementById('fprep')?.remove();document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="fcheck"><div class="dialog"><span class="ey">FILLER CHECKLIST</span><h2>Pre-fill checklist</h2>${['Work area clean and ready','Correct equipment available','Blender / filling area visually checked','Required PPE in place','No foreign material observed'].map(x=>`<label style="display:block;padding:10px 0"><input type="checkbox" class="precheck"> ${x}</label>`).join('')}<div class="actions"><button class="primary" onclick="saveFillerChecklist()">Complete Checklist</button><button class="secondary" onclick="document.getElementById('fcheck').remove();fillingHub()">Cancel</button></div></div></div>`)}
 function saveFillerChecklist(){let b=[...document.querySelectorAll('.precheck')];if(b.some(x=>!x.checked))return alert('Complete every checklist item first.');ensureFillingPrep();state.fillingPrep.checklist=true;save();log(`FILLER CHECKLIST completed by ${me.name}`);document.getElementById('fcheck').remove();fillingHub()}
 function knifeQR(d){ensureFillingPrep();document.getElementById('fprep')?.remove();let t=d==='in'?'KNIFE IN':'KNIFE OUT';document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="knife"><div class="dialog"><span class="ey">KNIFE CONTROL</span><h2>${t}</h2><p>Scan the QR code attached to the knife.</p><div class="actions"><button class="primary" onclick="recordKnife('${d}','AN|KNIFE|DEMO-001')">Test Knife QR</button><button class="secondary" onclick="document.getElementById('knife').remove();fillingHub()">Cancel</button></div></div></div>`)}
-function recordKnife(d,p){if(!p.includes('|KNIFE|'))return alert('Invalid Knife QR.');ensureFillingPrep();let n=new Date().toISOString();if(d==='in'){state.fillingPrep.knifeIn=true;state.fillingPrep.knifeInAt=n}else{state.fillingPrep.knifeOut=true;state.fillingPrep.knifeOutAt=n}save();log(`KNIFE ${d.toUpperCase()} ${p} by ${me.name}`);document.getElementById('knife')?.remove();fillingPrep()}
+
+function fillingScanComplete(){
+ // Demo app: Check 2 being assigned/completed is the current signal that the Filling verification reached 100%.
+ return !!(state.ops && state.ops.filling && state.ops.filling[2]);
+}
+function scheduleAutoCloseAfterKnifeIn(){
+ const code=state.currentFillingBlender||'BLENDER-1';
+ if(!fillingScanComplete()) return;
+ if(!state.autoClose) state.autoClose={};
+ const due=Date.now()+10*60*1000;
+ state.autoClose[code]={due,product:(BLENDERS[code].queue[((state.blenderQueueIndex||{})[code]||0)]||'Unknown product'),knifeInAt:new Date().toISOString(),filler:me.name,fillerId:me.employee_id};
+ save();log(`${code} completion timer started after KNIFE IN — closes in 10 minutes`);
+ setTimeout(()=>processAutoClose(code),10*60*1000);
+}
+function processAutoClose(code){
+ const x=state.autoClose&&state.autoClose[code]; if(!x||Date.now()<x.due)return;
+ if(!state.blenderHistory)state.blenderHistory={}; if(!state.blenderHistory[code])state.blenderHistory[code]=[];
+ const release=state.qualityByBlender?.[code]||{};
+ state.blenderHistory[code].unshift({product:x.product,status:'completed',releasedBy:release.by||null,releasedById:release.id||null,filledBy:x.filler,filledById:x.fillerId,knifeInAt:x.knifeInAt,completedAt:new Date().toISOString()});
+ if(!state.blenderQueueIndex)state.blenderQueueIndex={};
+ state.blenderQueueIndex[code]=(state.blenderQueueIndex[code]||0)+1;
+ if(!state.qualityByBlender)state.qualityByBlender={};
+ state.qualityByBlender[code]={status:'waiting',reason:'Previous product completed — awaiting Quality release',by:null,id:null,time:new Date().toISOString()};
+ delete state.autoClose[code];save();log(`${code} AUTO CLOSED — next product NOT RELEASED`);
+}
+function processDueAutoCloses(){if(!state.autoClose)return;Object.keys(state.autoClose).forEach(processAutoClose)}
+function recordKnife(d,p){
+ if(!p.includes('|KNIFE|'))return alert('Invalid Knife QR.');
+ ensureFillingPrep();let n=new Date().toISOString();
+ if(d==='out'){state.fillingPrep.knifeOut=true;state.fillingPrep.knifeOutAt=n;log(`KNIFE OUT — removed from box — ${p} by ${me.name}`)}
+ else {state.fillingPrep.knifeIn=true;state.fillingPrep.knifeInAt=n;log(`KNIFE IN — returned to box — ${p} by ${me.name}`)}
+ save();document.getElementById('knife')?.remove();
+ if(d==='in'&&fillingScanComplete()){scheduleAutoCloseAfterKnifeIn();alert('Knife returned. Filling verification is complete. Blender will return to NOT RELEASED in 10 minutes.')}
+ fillingHub();
+}
 function continueFilling(){document.getElementById('fprep')?.remove();startMaster()}
 function qualityBanner(){
  const q=state.quality||{status:'waiting'};
@@ -255,17 +315,17 @@ function qualityBlenderScanner(){
  document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="bscan"><div class="dialog"><span class="ey">QUALITY · BLENDER RELEASE</span><h2>Scan Blender QR</h2><p class="muted">The QR identifies the blender. Its production queue is loaded separately.</p><div class="actions"><button class="primary" onclick="openBlenderRelease('BLENDER-1')">Test Blender 1 QR</button><button class="secondary" onclick="document.getElementById('bscan').remove()">Cancel</button></div></div></div>`);
 }
 function openBlenderRelease(code){
- const b=BLENDERS[code];if(!b)return alert('Blender QR not recognized.');
+ processDueAutoCloses(); const b=BLENDERS[code];if(!b)return alert('Blender QR not recognized.');
  selectedBlender=code;document.getElementById('bscan')?.remove();
  const q=state.qualityByBlender?.[code]||{status:'waiting'};
- document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="brelease"><div class="dialog"><span class="ey">QUALITY · ${b.name.toUpperCase()}</span><h2>${b.name}</h2><div class="card"><h3>Current status</h3>${q.status==='released'?'<span class="status">RELEASED ✓</span>':q.status==='hold'?'<span class="status warn">HOLD · DO NOT USE</span>':'<span class="status warn">NOT RELEASED</span>'}</div><div class="card"><h3>Production Queue</h3>${b.queue.map((x,i)=>`<p><b>${i+1}.</b> ${x}${i===0?' <span class="status">NEXT</span>':''}</p>`).join('')}</div><div class="actions"><button class="primary" onclick="setBlenderRelease('released')">Release Blender</button><button class="danger" onclick="setBlenderRelease('hold')">Place on Hold</button><button class="secondary" onclick="document.getElementById('brelease').remove()">Close</button></div></div></div>`);
+ document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="brelease"><div class="dialog"><span class="ey">QUALITY · ${b.name.toUpperCase()}</span><h2>${b.name}</h2><div class="card"><h3>Current status</h3>${q.status==='released'?'<span class="status">RELEASED ✓</span>':q.status==='hold'?'<span class="status warn">HOLD · DO NOT USE</span>':'<span class="status warn">NOT RELEASED</span>'}</div><div class="card"><h3>Production Queue</h3>${queue.length?queue.map((x,i)=>`<p><b>${i+1}.</b> ${x}${i===0?' <span class="status">NEXT</span>':''}</p>`).join(''):'<p>Queue complete</p>'}</div>${state.blenderHistory?.[code]?.length?`<div class="card"><h3>History</h3>${state.blenderHistory[code].slice(0,5).map(h=>`<p><b>${h.product}</b> · COMPLETED<br><span class="muted">Released by ${h.releasedById||''} ${h.releasedBy||'—'}<br>Filled by ${h.filledById||''} ${h.filledBy||'—'}<br>Knife In ${new Date(h.knifeInAt).toLocaleString()} · Completed ${new Date(h.completedAt).toLocaleString()}</span></p>`).join('')}</div>`:''}<div class="actions"><button class="primary" onclick="setBlenderRelease('released')">Release Blender</button><button class="danger" onclick="setBlenderRelease('hold')">Place on Hold</button><button class="secondary" onclick="document.getElementById('brelease').remove()">Close</button></div></div></div>`);
 }
 function setBlenderRelease(status){
  if(!(me.role==='quality'||me.role==='admin'))return alert('Quality access required.');
  let reason=null;if(status==='hold'){reason=prompt('Reason for Blender Hold');if(!reason)return}
  if(!state.qualityByBlender)state.qualityByBlender={};
  state.qualityByBlender[selectedBlender]={status,reason,by:me.name,id:me.employee_id,time:new Date().toISOString()};
- state.quality=state.qualityByBlender[selectedBlender];save();log(`${selectedBlender} ${status.toUpperCase()} by ${me.name}${reason?' — '+reason:''}`);
+ save();log(`${selectedBlender} ${status.toUpperCase()} by ${me.name}${reason?' — '+reason:''}`);
  document.getElementById('brelease')?.remove();alert(status==='released'?'BLENDER RELEASED':'BLENDER ON HOLD');
 }
 function qualityScanStart(){
