@@ -115,6 +115,8 @@ function resetDemo(){
 function R(){
  if(view==='login'){A.innerHTML=`<main class="login"><div class="card"><span class="ey">BLENDER CONTROL</span><h1>Sign in</h1><p class="muted">Enter your 6-digit PIN</p><input id="pin" class="pin" inputmode="numeric" maxlength="6" type="password"><button class="primary" style="width:100%" onclick="login()">Login</button><p id="err" class="muted"></p></div></main>`;return}
  if(view==='home'){A.innerHTML=H()+`<main class="wrap"><span class="ey">${me.role.toUpperCase()}</span><h1>Select operation</h1><div class="grid">${me.role!=='quality'?`<button class="tile" onclick="showBuildProducts()"><b>Build Blender</b>Choose a recipe (Spec), prepare, label and verify ingredients</button>`:''}${['operator','supervisor','admin'].includes(me.role)?`<button class="tile green" onclick="fillingHub()"><b>Filling Check</b>Checklist · Knife Control · Pallet Verification</button>`:''}${(me.role==='quality'||me.role==='admin')?`<button class="tile" style="background:#7656a8" onclick="qualityBlenderScanner()"><b>Blender Release</b>Scan Blender QR, view its production queue and release or hold</button>`:''}</div>${me.role==='supervisor'?`<div class="card"><h2>Supervisor Tools</h2><p class="muted">You can edit batch recipes, ingredients, quantities, Batch Code, production line and assigned Blender from Build Blender → recipe list. Every change requires a reason and is recorded in Audit.</p></div>`:''}${me.role==='admin'?`<div class="card"><h2>Administration</h2><div class="actions"><button class="primary" onclick="view='users';R()">Users</button><button class="secondary" onclick="showAudit()">Audit trail</button><button class="danger" onclick="resetDemo()">Reset demo batch</button></div></div>`:''}</main>`;return}
+ if(view==='fillingBlenders'){fillerBlenderSelection();return}
+ if(view==='fillingBlender'){renderFillingPanel();return}
  if(view==='buildLines'){
  const lines=['Line 1','Line 2','Line 3','Line 4','Line 5','Line 6','Capsule Line','Gel Line','Tablet Line'];
  A.innerHTML=H()+`<main><button class="secondary" onclick="view='home';R()">← Back</button><span class="ey">BLENDER TEAM</span><h1>Select line</h1><p class="muted">Choose the production line to see its recipes / Specs.</p><div class="card"><h2>Production lines</h2>${lines.map((l,i)=>`<button class="tile" style="width:100%;text-align:left;margin:10px 0;background:${i<6?'#1475c9':'#0b7f67'}" onclick="openRecipeLine('${l}')"><b>${l}</b><span style="display:block;font-size:.82em;margin-top:7px">${liveCatalog().filter(x=>x.line===l).length} recipe(s)</span></button>`).join('')}</div></main>`;return}
@@ -360,21 +362,10 @@ function blenderStatusForFillers(code){
  if(q.status==='hold') return `<span class="status warn">BLENDER HOLD</span><p><b>DO NOT USE BLENDER</b></p><p class="muted">${q.reason||'Contact Quality.'}</p>`;
  return `<span class="status warn">NOT RELEASED</span><p><b>Awaiting Quality release</b></p>`;
 }
-function fillingHub(){
- if(!['operator','supervisor','admin'].includes(me.role)) return alert('Operator, Supervisor or Admin access required.');
- processDueAutoCloses(); ensureFillingPrep();
- document.getElementById('fhub')?.remove();
- if(!state.currentFillingBlender || !BLENDERS[state.currentFillingBlender]){
-   return document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="fhub"><div class="dialog">
-   <span class="ey">FILLING TEAM</span><h2>Identify Blender</h2>
-   <p class="muted">Scan the fixed QR code on the blender before Checklist, Knife Control or Pallet Verification.</p>
-   <div class="card"><h3>Blender QR</h3><button class="primary" onclick="scanFillingBlender()">Scan Blender QR</button>
-   <p class="muted small">Test mode: use the button below to simulate the QR.</p>
-   <button class="secondary" onclick="setFillingBlender('BLENDER-1')">Test Blender 1 QR</button></div>
-   <button class="secondary" onclick="document.getElementById('fhub').remove()">Close</button>
-   </div></div>`);
- }
- renderFillingPanel();
+async function fillingHub(){
+ if(!me||!['operator','supervisor','admin'].includes(me.role))return alert('Access denied.');
+ await syncProductionQueue(); processDueAutoCloses();
+ state.currentFillingBlender=null; view='fillingBlenders'; R();
 }
 function scanFillingBlender(){
  document.getElementById('fhub')?.remove();
@@ -385,6 +376,14 @@ function scanFillingBlender(){
 function setFillingBlender(code){
  if(!BLENDERS[code])return alert('Blender QR not recognized.');
  state.currentFillingBlender=code;save();document.getElementById('fbscan')?.remove();document.getElementById('fhub')?.remove();renderFillingPanel();
+}
+function fillerBlenderSelection(){
+ const codes=Object.keys(BLENDERS);
+ A.innerHTML=H()+`<main><button class="secondary" onclick="view='home';R()">← Home</button><span class="ey">FILLING TEAM</span><h1>Select Blender</h1><p class="muted">Select the Blender to see its status, scheduled products and Filling controls.</p><div class="grid">${codes.map(code=>{const st=blenderStatusForFillers(code),q=queueForBlender(code),label=st&&st.decision==='hold'?'HOLD · DO NOT USE':st&&st.decision==='released'?'RELEASED':'NOT RELEASED';return `<button class="tile" style="text-align:left" onclick="openFillingBlender('${code}')"><b>${BLENDERS[code].name}</b><span style="display:block;margin-top:8px">${label}</span><span style="display:block;font-size:.82em;margin-top:5px">${q.length} product${q.length===1?'':'s'} scheduled</span></button>`}).join('')}</div></main>`;
+}
+async function openFillingBlender(code){
+ if(!BLENDERS[code])return alert('Unknown Blender.');
+ await syncProductionQueue(); state.currentFillingBlender=code; save(); view='fillingBlender'; R();
 }
 function renderFillingPanel(){
  processDueAutoCloses();ensureFillingPrep();
@@ -475,7 +474,10 @@ function qualityBanner(){
 const BLENDERS={
  'BLENDER-1':{name:'Blender 1',queue:['Whey Vanilla 1','Whey Vanilla 2','Mass Chocolate 1']},
  'BLENDER-2':{name:'Blender 2',queue:['Whey Chocolate 1','Diet Whey Chocolate 1']},
- 'BLENDER-3':{name:'Blender 3',queue:['Clear Whey Orange & Mango 1','Mass Chocolate 2']}
+ 'BLENDER-3':{name:'Blender 3',queue:['Clear Whey Orange & Mango 1','Mass Chocolate 2']},
+ 'BLENDER-4':{name:'Blender 4',queue:[]},
+ 'BLENDER-5':{name:'Blender 5',queue:[]},
+ 'BLENDER-6':{name:'Blender 6',queue:[]}
 };
 let selectedBlender=null;
 async function qualityBlenderScanner(){
