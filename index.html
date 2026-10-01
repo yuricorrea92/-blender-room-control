@@ -330,7 +330,7 @@ function openBlenderRelease(code){
  const releasedProduct=q.product||null;
  const productRows=remaining.length?remaining.map((product,i)=>{
    const isCurrent=q.status==='released'&&releasedProduct===product;
-   return `<button class="${isCurrent?'primary':'secondary'}" style="width:100%;text-align:left;margin:5px 0" onclick="selectQualityProduct('${code}',${JSON.stringify(product)})"><b>${i+1}. ${product}</b>${isCurrent?' · CURRENT / RELEASED':''}</button>`;
+   return `<button class="${isCurrent?'primary':'secondary'}" style="width:100%;text-align:left;margin:5px 0" onclick="selectQualityProduct('${code}','${String(product).replace(/'/g,"\\'")}')"><b>${i+1}. ${product}</b>${isCurrent?' · CURRENT / RELEASED':''}</button>`;
  }).join(''):'<p>Queue complete</p>';
  document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="brelease"><div class="dialog">
  <span class="ey">QUALITY · ${blender.name.toUpperCase()}</span><h2>${blender.name}</h2>
