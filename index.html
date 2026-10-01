@@ -33,7 +33,7 @@ function H(){return `<header><b>APPLIED NUTRITION</b><span>Blender Control</span
 function R(){
  if(view==='login'){A.innerHTML=`<main class="login"><div class="card"><span class="ey">BLENDER CONTROL</span><h1>Sign in</h1><p class="muted">Enter your 6-digit PIN</p><input id="pin" class="pin" inputmode="numeric" maxlength="6" type="password"><button class="primary" style="width:100%" onclick="login()">Login</button><p id="err" class="muted"></p></div></main>`;return}
  if(view==='home'){A.innerHTML=H()+`<main class="wrap"><span class="ey">${me.role.toUpperCase()}</span><h1>Select operation</h1><p class="muted">${DEMO.product} · ${DEMO.batch} · ${DEMO.spec} · Pallet ${DEMO.pallet}</p><div class="grid"><button class="tile" onclick="openStage('build')"><b>Build Pallet</b>Prepare, label and independently verify ingredients</button><button class="tile green" onclick="startMaster()"><b>Filling Check</b>Scan Master Pallet QR before verification</button></div>${me.role==='admin'?`<div class="card"><h2>Administration</h2><div class="actions"><button class="primary" onclick="view='users';R()">Users</button><button class="secondary" onclick="showAudit()">Audit trail</button><button class="danger" onclick="resetDemo()">Reset demo batch</button></div></div>`:''}</main>`;return}
- if(view==='users'){A.innerHTML=H()+`<main class="wrap"><span class="ey">ADMINISTRATION</span><h1>Users</h1><div class="card"><h2>Add employee</h2><input id="eid" placeholder="Employee ID"><input id="nm" placeholder="Full name"><input id="np" maxlength="6" inputmode="numeric" type="password" placeholder="6-digit PIN"><select id="role"><option value="operator">Operator</option><option value="supervisor">Supervisor</option><option value="admin">Admin</option></select><button class="primary" onclick="addUser()">Create user</button><p id="msg" class="muted"></p></div></main>`;return}
+ if(view==='users'){A.innerHTML=H()+`<main class="wrap"><span class="ey">ADMINISTRATION</span><h1>Users</h1><div class="card"><h2>Registered users</h2><div id="userlist"><p class="muted">Loading users...</p></div></div><div class="card"><h2>Add employee</h2><p class="muted">User ID is generated automatically (AN0001, AN0002...)</p><input id="nm" placeholder="Full name"><input id="np" maxlength="6" inputmode="numeric" type="password" placeholder="6-digit PIN"><select id="role"><option value="operator">Operator</option><option value="supervisor">Supervisor</option><option value="admin">Admin</option></select><button class="primary" onclick="addUser()">Create user</button><p id="msg" class="muted"></p></div></main>`;loadUsers();return}
  if(view==='work'){
    const d=state.scans[stage][checkNo];
    A.innerHTML=H()+`<main class="wrap"><span class="ey">${stage.toUpperCase()} · CHECK ${checkNo}</span><h1>${DEMO.product}</h1><p class="muted">Batch ${DEMO.batch} · ${DEMO.spec} · Pallet ${DEMO.pallet}</p><span class="status">INDEPENDENT CHECK</span>
@@ -50,12 +50,18 @@ function err(x){document.getElementById('err').textContent=x}
 function logout(){if(me)log(me.name+' signed out');me=null;adminPin='';view='login';R()}
 function home(){view='home';stage=null;selected=null;R()}
 function openStage(x){stage=x;checkNo=state.ops[x][1]?2:1;if(checkNo===2&&state.ops[x][1]===me.id){alert('Check 2 must be completed by a different operator.');return}view='work';log(me.name+' opened '+x+' Check '+checkNo);R()}
+async function loadUsers(){
+ const box=document.getElementById('userlist');if(!box)return;
+ const {data,error}=await SB.rpc('admin_list_users',{p_admin:me.id,p_pin:adminPin});
+ if(error){box.innerHTML='<p class="muted">User directory needs the final database update before it can be displayed.</p>';return}
+ box.innerHTML=`<table><thead><tr><th>User ID</th><th>Name</th><th>Role</th><th>Status</th></tr></thead><tbody>${data.map(u=>`<tr><td><b>${u.employee_id}</b></td><td>${u.name}</td><td>${u.role}</td><td>${u.active?'Active':'Inactive'}</td></tr>`).join('')}</tbody></table>`;
+}
 async function addUser(){
- const eid=document.getElementById('eid').value.trim(),nm=document.getElementById('nm').value.trim(),np=document.getElementById('np').value,role=document.getElementById('role').value,msg=document.getElementById('msg');
- if(!eid||!nm||!/^\d{6}$/.test(np)){msg.textContent='Complete all fields. PIN must contain 6 digits.';return}
- const {error}=await SB.rpc('admin_create_user',{p_admin:me.id,p_pin:adminPin,p_employee_id:eid,p_name:nm,p_new_pin:np,p_role:role});
- msg.textContent=error?'Could not create user: '+error.message:'User created successfully.';
- if(!error){log('Admin created employee '+eid+' ('+role+')');document.getElementById('eid').value='';document.getElementById('nm').value='';document.getElementById('np').value=''}
+ const nm=document.getElementById('nm').value.trim(),np=document.getElementById('np').value,role=document.getElementById('role').value,msg=document.getElementById('msg');
+ if(!nm||!/^\d{6}$/.test(np)){msg.textContent='Enter the employee name and a 6-digit PIN.';return}
+ const {data,error}=await SB.rpc('admin_create_user',{p_admin:me.id,p_pin:adminPin,p_name:nm,p_new_pin:np,p_role:role});
+ if(error){msg.textContent='Database update required before automatic IDs can be used.';return}
+ msg.textContent='User '+data+' created successfully.';document.getElementById('nm').value='';document.getElementById('np').value='';loadUsers()
 }
 function startMaster(){stage='filling';camera('master',null)}
 function scanBag(i){selected=i;camera('bag',i)}
