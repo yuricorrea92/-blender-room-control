@@ -94,7 +94,12 @@ async function addUser(){
  if(error){msg.textContent='User IDs are generated automatically (AN0001, AN0002...).';return}
  msg.textContent='User '+data+' created successfully.';document.getElementById('nm').value='';document.getElementById('np').value='';loadUsers()
 }
-function startMaster(){stage='filling';camera('master',null)}
+function startMaster(){
+ stage='filling';
+ // In production the Master Pallet QR payload will supply this automatically.
+ state.currentFillingBlender=null; save();
+ camera('master',null)
+}
 function scanBag(i){selected=i;camera('bag',i)}
 function camera(kind,i){
  document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="cam"><div class="dialog"><span class="ey">QR SCANNER</span><h2>${kind==='master'?'Scan Pallet Master QR':'Scan Bag QR'}</h2><p class="muted">Point the rear camera at the label.</p><div id="reader"></div><div class="actions"><button class="secondary" onclick="stopCam()">Cancel</button></div></div></div>`);
@@ -244,28 +249,15 @@ function finishBlenderRun(code){
 function fillingHub(){
  if(!['operator','supervisor','admin'].includes(me.role)) return alert('Operator, Supervisor or Admin access required.');
  processDueAutoCloses(); ensureFillingPrep();
- if(!state.currentFillingBlender || !BLENDERS[state.currentFillingBlender]) state.currentFillingBlender='BLENDER-1';
- const code=state.currentFillingBlender, b=BLENDERS[code];
- const qidx=(state.blenderQueueIndex&&state.blenderQueueIndex[code])||0;
- const qstate=state.qualityByBlender?.[code]||{status:'waiting'};
- const currentProduct=qstate.status==='released'&&qstate.product?qstate.product:(b.queue[qidx]||'Queue complete');
- document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="fhub"><div class="dialog"><span class="ey">FILLING TEAM</span><h2>Choose an operation</h2>
- <div class="card"><h3>Select Blender</h3><div class="actions">${Object.keys(BLENDERS).map(c=>`<button class="${c===code?'primary':'secondary'}" onclick="selectFillingBlender('${c}')">${BLENDERS[c].name}</button>`).join('')}</div></div>
- <div class="card" style="border-width:2px"><h3>${b.name} Status</h3>${blenderStatusForFillers(code)}<p><b>Current / next product:</b> ${currentProduct}</p>
- ${state.autoClose?.[code]?`<p><b>Cycle finishing:</b> Knife In recorded. Automatic reset to NOT RELEASED at ${new Date(state.autoClose[code].due).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}.</p>`:''}
- ${state.blenderHistory?.[code]?.length?`<hr><h4>Previous runs</h4>${state.blenderHistory[code].slice(0,3).map(h=>`<p><b>${h.product}</b> · COMPLETED<br><span class="muted">Released by ${h.releasedById||''} ${h.releasedBy||'—'} · Filled by ${h.filledById||''} ${h.filledBy||'—'}<br>${new Date(h.completedAt).toLocaleString()}</span></p>`).join('')}`:''}</div>
- <p class="muted">Checklist, Knife Control and pallet verification are independent. Quality release controls whether this blender is available for the next run.</p>
- <div class="card"><h3>Filler Checklist</h3><button class="primary" onclick="document.getElementById('fhub').remove();openFillerChecklist()">Open Checklist</button></div>
- <div class="card"><h3>Knife Control</h3><div class="actions"><button class="primary" onclick="document.getElementById('fhub').remove();knifeQR('in')">Knife In · Return</button><button class="secondary" onclick="document.getElementById('fhub').remove();knifeQR('out')">Knife Out · Remove</button></div></div>
- <div class="card"><h3>Pallet Verification</h3><button class="primary" onclick="document.getElementById('fhub').remove();startMaster()">Scan Master Pallet QR</button></div>
- <button class="secondary" onclick="document.getElementById('fhub').remove()">Close</button></div></div>`);
-}
-function ensureFillingPrep(){
- if(!state.fillingPrep || typeof state.fillingPrep!=='object') state.fillingPrep={};
- if(typeof state.fillingPrep.checklist!=='boolean') state.fillingPrep.checklist=false;
- if(typeof state.fillingPrep.knifeOut!=='boolean') state.fillingPrep.knifeOut=false;
- if(typeof state.fillingPrep.knifeIn!=='boolean') state.fillingPrep.knifeIn=false;
- return state.fillingPrep;
+ document.getElementById('fhub')?.remove();
+ document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="fhub"><div class="dialog">
+ <span class="ey">FILLING TEAM</span><h2>Choose an operation</h2>
+ <p class="muted">Choose what you need to do. The blender and product are identified automatically when the Master Pallet QR is scanned.</p>
+ <div class="card"><h3>Filler Checklist</h3><p class="muted">Complete the pre-fill checks.</p><button class="primary" onclick="document.getElementById('fhub').remove();openFillerChecklist()">Open Checklist</button></div>
+ <div class="card"><h3>Knife Control</h3><p class="muted">Knife Out when removed from the box. Knife In when returned.</p><div class="actions"><button class="secondary" onclick="document.getElementById('fhub').remove();knifeQR('out')">Knife Out · Remove</button><button class="primary" onclick="document.getElementById('fhub').remove();knifeQR('in')">Knife In · Return</button></div></div>
+ <div class="card"><h3>Pallet Verification</h3><p class="muted">Scan the Master Pallet QR to identify the product, batch and assigned blender.</p><button class="primary" onclick="document.getElementById('fhub').remove();startMaster()">Scan Master Pallet QR</button></div>
+ <button class="secondary" onclick="document.getElementById('fhub').remove()">Close</button>
+ </div></div>`);
 }
 function openFillerChecklist(){document.getElementById('fprep')?.remove();document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="fcheck"><div class="dialog"><span class="ey">FILLER CHECKLIST</span><h2>Pre-fill checklist</h2>${['Work area clean and ready','Correct equipment available','Blender / filling area visually checked','Required PPE in place','No foreign material observed'].map(x=>`<label style="display:block;padding:10px 0"><input type="checkbox" class="precheck"> ${x}</label>`).join('')}<div class="actions"><button class="primary" onclick="saveFillerChecklist()">Complete Checklist</button><button class="secondary" onclick="document.getElementById('fcheck').remove();fillingHub()">Cancel</button></div></div></div>`)}
 function saveFillerChecklist(){let b=[...document.querySelectorAll('.precheck')];if(b.some(x=>!x.checked))return alert('Complete every checklist item first.');ensureFillingPrep();state.fillingPrep.checklist=true;save();log(`FILLER CHECKLIST completed by ${me.name}`);document.getElementById('fcheck').remove();fillingHub()}
