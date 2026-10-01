@@ -19,6 +19,31 @@ input,select{width:100%;padding:13px;border:1px solid #cad7e4;border-radius:10px
 .modal{position:fixed;inset:0;background:#04182cdd;display:grid;place-items:center;padding:15px;z-index:20}.dialog{background:#fff;border-radius:16px;padding:22px;width:min(520px,96vw)}#reader{width:100%}
 table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid #edf1f5}
 @media(max-width:650px){.grid{grid-template-columns:1fr}.actions button{flex:1}header{font-size:12px}.row{grid-template-columns:1fr 60px}}
+
+/* iOS/mobile scroll fix for long operation dialogs */
+.modal{
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  align-items:flex-start !important;
+  padding-top:max(20px, env(safe-area-inset-top)) !important;
+  padding-bottom:max(32px, env(safe-area-inset-bottom)) !important;
+}
+.modal .dialog{
+  max-height:none !important;
+  height:auto !important;
+  overflow:visible !important;
+  margin:auto !important;
+  flex:0 0 auto;
+}
+@media (max-width:700px){
+  .modal{display:block !important;}
+  .modal .dialog{
+    width:calc(100% - 24px) !important;
+    margin:16px auto 40px !important;
+  }
+}
 </style></head><body><div id="app"></div>
 <script>
 const SB=supabase.createClient('https://uehuvtnrsktskfmmbnul.supabase.co','sb_publishable_e-D582vTrmEAqG7X18sSlg_51trSTZG');
@@ -114,13 +139,63 @@ function showTestQR(i,n=1){
 }
 function labels(i){
  const x=DEMO.items[i],w=window.open('','_blank');if(!w)return alert('Allow pop-ups for label printing.');
- let h=`<html><head><style>@page{size:70mm 50mm;margin:0}body{margin:0;font-family:Arial}.l{width:70mm;height:50mm;padding:4mm;page-break-after:always;display:flex;gap:3mm;align-items:center}.q{width:28mm}.t b{font-size:14pt;display:block}</style><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script></head><body>`;
+ let h=`<html><head><style>@page{size:70mm 50mm;margin:0}body{margin:0;font-family:Arial}.l{width:70mm;height:50mm;padding:4mm;page-break-after:always;display:flex;gap:3mm;align-items:center}.q{width:28mm}.t b{font-size:14pt;display:block}
+/* iOS/mobile scroll fix for long operation dialogs */
+.modal{
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  align-items:flex-start !important;
+  padding-top:max(20px, env(safe-area-inset-top)) !important;
+  padding-bottom:max(32px, env(safe-area-inset-bottom)) !important;
+}
+.modal .dialog{
+  max-height:none !important;
+  height:auto !important;
+  overflow:visible !important;
+  margin:auto !important;
+  flex:0 0 auto;
+}
+@media (max-width:700px){
+  .modal{display:block !important;}
+  .modal .dialog{
+    width:calc(100% - 24px) !important;
+    margin:16px auto 40px !important;
+  }
+}
+</style><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script></head><body>`;
  for(let n=1;n<=x.qty;n++)h+=`<div class="l"><div class="q" id="q${n}"></div><div class="t"><b>${x.name}</b>${x.kg} kg<br>${String(n).padStart(2,'0')}/${x.qty}<br>${DEMO.batch}</div></div>`;
  h+=`<script>window.onload=()=>{${Array.from({length:x.qty},(_,j)=>`new QRCode(document.getElementById('q${j+1}'),{text:'AN|BAG|${DEMO.batch}|${x.name.toUpperCase()}|${j+1}|${x.qty}|${x.kg}',width:106,height:106});`).join('')}setTimeout(()=>window.print(),700)}<\/script></body></html>`;w.document.write(h);w.document.close();log(`${x.qty} labels generated: ${x.name}`)
 }
 function printMaster(){
  const w=window.open('','_blank');if(!w)return alert('Allow pop-ups for printing.');
- w.document.write(`<html><head><style>@page{size:70mm 50mm;margin:0}body{text-align:center;font-family:Arial;padding:4mm}#q{width:28mm;margin:auto}</style><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script></head><body><h2>${DEMO.product}</h2><b>MASTER PALLET</b><div>${DEMO.batch}</div><div id="q"></div><script>new QRCode(document.getElementById('q'),{text:'AN|MASTER|${DEMO.batch}',width:106,height:106});setTimeout(()=>window.print(),600)<\/script></body></html>`);w.document.close()
+ w.document.write(`<html><head><style>@page{size:70mm 50mm;margin:0}body{text-align:center;font-family:Arial;padding:4mm}#q{width:28mm;margin:auto}
+/* iOS/mobile scroll fix for long operation dialogs */
+.modal{
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  align-items:flex-start !important;
+  padding-top:max(20px, env(safe-area-inset-top)) !important;
+  padding-bottom:max(32px, env(safe-area-inset-bottom)) !important;
+}
+.modal .dialog{
+  max-height:none !important;
+  height:auto !important;
+  overflow:visible !important;
+  margin:auto !important;
+  flex:0 0 auto;
+}
+@media (max-width:700px){
+  .modal{display:block !important;}
+  .modal .dialog{
+    width:calc(100% - 24px) !important;
+    margin:16px auto 40px !important;
+  }
+}
+</style><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script></head><body><h2>${DEMO.product}</h2><b>MASTER PALLET</b><div>${DEMO.batch}</div><div id="q"></div><script>new QRCode(document.getElementById('q'),{text:'AN|MASTER|${DEMO.batch}',width:106,height:106});setTimeout(()=>window.print(),600)<\/script></body></html>`);w.document.close()
 }
 function showAudit(){alert(state.audit.length?state.audit.join('\n'):'No audit events yet.')}
 
