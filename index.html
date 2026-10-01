@@ -52,6 +52,29 @@ items:[{name:'Maltodextrin',kg:25,qty:40},{name:'Skimmed Milk Powder',kg:25,qty:
 let me=null,adminPin='',view='login',stage=null,checkNo=1,qr=null,selected=null;
 let state=JSON.parse(localStorage.getItem('bc_runtime')||'null')||{scans:{build:{1:{},2:{}},filling:{1:{},2:{}}},ops:{build:{},filling:{}},holds:[],audit:[],quality:{status:'waiting',by:null,id:null,time:null,reason:null}};
 const A=document.getElementById('app');
+let BACKEND_QUEUE=[];
+async function syncProductionQueue(){
+ try{
+  const {data,error}=await SB.rpc('get_production_queue');
+  if(error)throw error;
+  BACKEND_QUEUE=(data||[]).map(r=>({
+   id:r.id, sourceCardId:r.source_card_id, product:r.product, batch:r.batch_code||'', spec:r.spec_code||'',
+   line:r.production_line||'Unassigned', blender:r.blender_code||null,
+   items:(r.ingredients||[]).map(v=>({name:v.ingredient,kg:Number(v.bag_weight),qty:Number(v.quantity)})),
+   position:r.position
+  }));
+  return BACKEND_QUEUE;
+ }catch(e){console.error('Production queue sync failed',e);return BACKEND_QUEUE}
+}
+function liveCatalog(){
+ const local=PRODUCT_CATALOG.map((x,i)=>({...effectiveRecipe(x),_baseIndex:i,_source:'local'}));
+ const remote=BACKEND_QUEUE.map(x=>({...x,pallet:'1/1',status:'scheduled',_source:'trello'}));
+ return [...remote,...local];
+}
+function queueForBlender(code){
+ const remote=BACKEND_QUEUE.filter(x=>x.blender===code).sort((a,b)=>(Number(a.position)||0)-(Number(b.position)||0)).map(x=>x.product);
+ return remote.length?remote:(BLENDERS[code]?.queue||[]);
+}
 function ensureRuntimeState(){
  if(!state.scans)state.scans={}; if(!state.scans.build)state.scans.build={1:{},2:{}}; if(!state.scans.filling)state.scans.filling={1:{},2:{}};
  if(!state.scans.build[1])state.scans.build[1]={}; if(!state.scans.build[2])state.scans.build[2]={};
@@ -94,10 +117,10 @@ function R(){
  if(view==='home'){A.innerHTML=H()+`<main class="wrap"><span class="ey">${me.role.toUpperCase()}</span><h1>Select operation</h1><div class="grid">${me.role!=='quality'?`<button class="tile" onclick="showBuildProducts()"><b>Build Blender</b>Choose a recipe (Spec), prepare, label and verify ingredients</button>`:''}${['operator','supervisor','admin'].includes(me.role)?`<button class="tile green" onclick="fillingHub()"><b>Filling Check</b>Checklist · Knife Control · Pallet Verification</button>`:''}${(me.role==='quality'||me.role==='admin')?`<button class="tile" style="background:#7656a8" onclick="qualityBlenderScanner()"><b>Blender Release</b>Scan Blender QR, view its production queue and release or hold</button>`:''}</div>${me.role==='supervisor'?`<div class="card"><h2>Supervisor Tools</h2><p class="muted">You can edit batch recipes, ingredients, quantities, Batch Code, production line and assigned Blender from Build Blender → recipe list. Every change requires a reason and is recorded in Audit.</p></div>`:''}${me.role==='admin'?`<div class="card"><h2>Administration</h2><div class="actions"><button class="primary" onclick="view='users';R()">Users</button><button class="secondary" onclick="showAudit()">Audit trail</button><button class="danger" onclick="resetDemo()">Reset demo batch</button></div></div>`:''}</main>`;return}
  if(view==='buildLines'){
  const lines=['Line 1','Line 2','Line 3','Line 4','Line 5','Line 6','Capsule Line','Gel Line','Tablet Line'];
- A.innerHTML=H()+`<main><button class="secondary" onclick="view='home';R()">← Back</button><span class="ey">BLENDER TEAM</span><h1>Select line</h1><p class="muted">Choose the production line to see its recipes / Specs.</p><div class="card"><h2>Production lines</h2>${lines.map((l,i)=>`<button class="tile" style="width:100%;text-align:left;margin:10px 0;background:${i<6?'#1475c9':'#0b7f67'}" onclick="openRecipeLine('${l}')"><b>${l}</b><span style="display:block;font-size:.82em;margin-top:7px">${PRODUCT_CATALOG.filter(x=>x.line===l).length} recipe(s)</span></button>`).join('')}</div></main>`;return}
+ A.innerHTML=H()+`<main><button class="secondary" onclick="view='home';R()">← Back</button><span class="ey">BLENDER TEAM</span><h1>Select line</h1><p class="muted">Choose the production line to see its recipes / Specs.</p><div class="card"><h2>Production lines</h2>${lines.map((l,i)=>`<button class="tile" style="width:100%;text-align:left;margin:10px 0;background:${i<6?'#1475c9':'#0b7f67'}" onclick="openRecipeLine('${l}')"><b>${l}</b><span style="display:block;font-size:.82em;margin-top:7px">${liveCatalog().filter(x=>x.line===l).length} recipe(s)</span></button>`).join('')}</div></main>`;return}
  if(view==='buildProducts'){
- const recipes=PRODUCT_CATALOG.filter(x=>x.line===selectedLine);
- A.innerHTML=H()+`<main><button class="secondary" onclick="view='buildLines';R()">← Back to lines</button><span class="ey">BLENDER TEAM · ${selectedLine}</span><h1>Select recipe</h1><p class="muted">Choose a recipe (Spec) for ${selectedLine}.</p><div class="card"><h2>${selectedLine} — Recipes / Specs</h2>${recipes.map(x=>{const i=PRODUCT_CATALOG.indexOf(x),e=effectiveRecipe(x);return `<div class="card"><button class="tile" style="width:100%;text-align:left;margin:0;background:#1475c9" onclick="selectBuildProduct(${i})"><b>${e.product}</b><span style="display:block;font-size:.82em;margin-top:7px">Batch ${e.batch} · Spec ${e.spec}${e.blender?' · '+BLENDERS[e.blender].name:''}</span></button>${['supervisor','admin'].includes(me.role)?`<button class="secondary" style="width:100%;margin-top:8px" onclick="editRecipe(${i})">Edit Recipe / Batch</button>`:''}</div>`}).join('')}</div><button class="secondary" onclick="view='buildLines';R()">← Back to lines</button></main>`;return}
+ const recipes=liveCatalog().filter(x=>x.line===selectedLine);
+ A.innerHTML=H()+`<main><button class="secondary" onclick="view='buildLines';R()">← Back to lines</button><span class="ey">BLENDER TEAM · ${selectedLine}</span><h1>Select recipe</h1><p class="muted">Choose a recipe (Spec) for ${selectedLine}.</p><div class="card"><h2>${selectedLine} — Recipes / Specs</h2>${recipes.length?recipes.map((e,i)=>`<div class="card"><button class="tile" style="width:100%;text-align:left;margin:0;background:#1475c9" onclick="selectLiveBuildProduct(${i})"><b>${e.product}</b><span style="display:block;font-size:.82em;margin-top:7px">Batch ${e.batch} · Spec ${e.spec}${e.blender&&BLENDERS[e.blender]?' · '+BLENDERS[e.blender].name:''}${e._source==='trello'?' · TRELLO':''}</span></button>${['supervisor','admin'].includes(me.role)&&e._source==='local'?`<button class="secondary" style="width:100%;margin-top:8px" onclick="editRecipe(${e._baseIndex})">Edit Recipe / Batch</button>`:''}</div>`).join(''):'<p class="muted">No recipes scheduled for this line.</p>'}</div><button class="secondary" onclick="view='buildLines';R()">← Back to lines</button></main>`;return}
  if(view==='users'){A.innerHTML=H()+`<main class="wrap"><span class="ey">ADMINISTRATION</span><h1>Users</h1><div class="card"><h2>Registered users</h2><div id="userlist"><p class="muted">Loading users...</p></div></div><div class="card"><h2>Add employee</h2><p class="muted">User ID is generated automatically (AN0001, AN0002...)</p><input id="nm" placeholder="Full name"><input id="np" maxlength="6" inputmode="numeric" type="password" placeholder="6-digit PIN"><select id="role"><option value="operator">Operator</option><option value="supervisor">Supervisor</option><option value="quality">Quality</option><option value="admin">Admin</option></select><button class="primary" onclick="addUser()">Create user</button><p id="msg" class="muted"></p></div></main>`;loadUsers();return}
  if(view==='work'){
    const d=state.scans[stage][checkNo];
@@ -305,7 +328,14 @@ function saveRecipeEdit(i){
  save();document.getElementById('redit')?.remove();R();
 }
 function showBuildProducts(){ selectedLine=null; view='buildLines';R(); }
-function openRecipeLine(line){ selectedLine=line; view='buildProducts';R(); }
+async function openRecipeLine(line){ selectedLine=line; await syncProductionQueue(); view='buildProducts';R(); }
+function selectLiveBuildProduct(i){
+ const recipes=liveCatalog().filter(x=>x.line===selectedLine),x=recipes[i]; if(!x)return;
+ DEMO.product=x.product;DEMO.batch=x.batch;DEMO.spec=x.spec;DEMO.pallet=x.pallet||'1/1';DEMO.items=(x.items||[]).map(v=>({...v}));
+ state.currentBuildBlender=x.blender||null;
+ if(state.activeBuildBatch!==DEMO.batch){state.scans.build={1:{},2:{}};state.ops.build={};state.activeBuildBatch=DEMO.batch;save();}
+ openStage('build');
+}
 function selectBuildProduct(i){
  const x=effectiveRecipe(PRODUCT_CATALOG[i]);
  DEMO.product=x.product;DEMO.batch=x.batch;DEMO.spec=x.spec;DEMO.pallet=x.pallet;DEMO.items=x.items.map(v=>({...v}));
@@ -325,7 +355,7 @@ function ensureFillingPrep(){
 }
 function blenderStatusForFillers(code){
  const b=BLENDERS[code]; if(!b) return '<span class="status warn">BLENDER NOT FOUND</span>';
- const q=state.qualityByBlender?.[code]||{status:'waiting'}; const qi=(state.blenderQueueIndex&&state.blenderQueueIndex[code])||0; const completed=state.blenderCompleted?.[code]||[]; const queue=b.queue.filter(x=>!completed.includes(x));
+ const q=state.qualityByBlender?.[code]||{status:'waiting'}; const qi=(state.blenderQueueIndex&&state.blenderQueueIndex[code])||0; const completed=state.blenderCompleted?.[code]||[]; const queue=queueForBlender(code).filter(x=>!completed.includes(x));
  if(q.status==='released') return `<span class="status">BLENDER RELEASED ✓</span><p><b>${q.product||queue[0]||'Product not recorded'}</b></p><p class="muted">Released by ${q.id||''} ${q.by||''}${q.time?'<br>'+new Date(q.time).toLocaleString():''}</p>`;
  if(q.status==='hold') return `<span class="status warn">BLENDER HOLD</span><p><b>DO NOT USE BLENDER</b></p><p class="muted">${q.reason||'Contact Quality.'}</p>`;
  return `<span class="status warn">NOT RELEASED</span><p><b>Awaiting Quality release</b></p>`;
@@ -448,17 +478,19 @@ const BLENDERS={
  'BLENDER-3':{name:'Blender 3',queue:['Clear Whey Orange & Mango 1','Mass Chocolate 2']}
 };
 let selectedBlender=null;
-function qualityBlenderScanner(){
+async function qualityBlenderScanner(){
+ await syncProductionQueue();
  if(!(me.role==='quality'||me.role==='admin'))return alert('Quality access required.');
  document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="bscan"><div class="dialog"><span class="ey">QUALITY · BLENDER RELEASE</span><h2>Scan Blender QR</h2><p class="muted">The QR identifies the blender. Its production queue is loaded separately.</p><div class="actions"><button class="primary" onclick="openBlenderRelease('BLENDER-1')">Test Blender 1 QR</button><button class="secondary" onclick="document.getElementById('bscan').remove()">Cancel</button></div></div></div>`);
 }
-function openBlenderRelease(code){
+async function openBlenderRelease(code){
+ await syncProductionQueue();
  processDueAutoCloses(); const blender=BLENDERS[code];if(!blender)return alert('Blender QR not recognized.');
  selectedBlender=code;document.getElementById('bscan')?.remove();
  const q=state.qualityByBlender?.[code]||{status:'waiting'};
  const qi=(state.blenderQueueIndex&&state.blenderQueueIndex[code])||0;
  const completed=state.blenderCompleted?.[code]||[];
- const remaining=blender.queue.filter(x=>!completed.includes(x));
+ const remaining=queueForBlender(code).filter(x=>!completed.includes(x));
  const releasedProduct=q.product||null;
  const productRows=remaining.length?remaining.map((product,i)=>{
    const isCurrent=q.status==='released'&&releasedProduct===product;
@@ -525,5 +557,5 @@ async function removeUser(employeeId,name){
  await loadUsers();R();
 }
 function resetDemo(){if(!confirm('Reset all demo scans/checks on this device?'))return;localStorage.removeItem('bc_runtime');location.reload()}
-R();
+syncProductionQueue().finally(()=>R());
 </script></body></html>
