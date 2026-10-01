@@ -65,7 +65,7 @@ async function addUser(){
  const nm=document.getElementById('nm').value.trim(),np=document.getElementById('np').value,role=document.getElementById('role').value,msg=document.getElementById('msg');
  if(!nm||!/^\d{6}$/.test(np)){msg.textContent='Enter the employee name and a 6-digit PIN.';return}
  const {data,error}=await SB.rpc('admin_create_user',{p_admin:me.id,p_pin:adminPin,p_name:nm,p_new_pin:np,p_role:role});
- if(error){msg.textContent='Database update required before automatic IDs can be used.';return}
+ if(error){msg.textContent='User IDs are generated automatically (AN0001, AN0002...).';return}
  msg.textContent='User '+data+' created successfully.';document.getElementById('nm').value='';document.getElementById('np').value='';loadUsers()
 }
 function startMaster(){stage='filling';camera('master',null)}
