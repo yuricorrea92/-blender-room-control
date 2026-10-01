@@ -61,6 +61,8 @@ function ensureRuntimeState(){
  if(!state.qualityByBlender)state.qualityByBlender={}; if(!state.blenderHistory)state.blenderHistory={};
  if(!state.blenderCompleted)state.blenderCompleted={};
  if(!state.recipeOverrides)state.recipeOverrides={};
+ if(!state.fillingPrep || typeof state.fillingPrep!=='object')state.fillingPrep={checklist:false,knifeOut:false,knifeIn:false};
+ if(!state.autoClose || typeof state.autoClose!=='object')state.autoClose={};
 }
 ensureRuntimeState();
 function save(){localStorage.setItem('bc_runtime',JSON.stringify(state))}
@@ -314,6 +316,13 @@ function selectBuildProduct(i){
  openStage('build');
 }
 
+function ensureFillingPrep(){
+ if(!state.fillingPrep || typeof state.fillingPrep!=='object') state.fillingPrep={};
+ if(typeof state.fillingPrep.checklist!=='boolean') state.fillingPrep.checklist=false;
+ if(typeof state.fillingPrep.knifeOut!=='boolean') state.fillingPrep.knifeOut=false;
+ if(typeof state.fillingPrep.knifeIn!=='boolean') state.fillingPrep.knifeIn=false;
+ return state.fillingPrep;
+}
 function blenderStatusForFillers(code){
  const b=BLENDERS[code]; if(!b) return '<span class="status warn">BLENDER NOT FOUND</span>';
  const q=state.qualityByBlender?.[code]||{status:'waiting'}; const qi=(state.blenderQueueIndex&&state.blenderQueueIndex[code])||0; const completed=state.blenderCompleted?.[code]||[]; const queue=b.queue.filter(x=>!completed.includes(x));
