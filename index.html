@@ -25,15 +25,15 @@ const SB=supabase.createClient('https://uehuvtnrsktskfmmbnul.supabase.co','sb_pu
 const DEMO={batch:'WV260930-04',product:'Whey Vanilla',spec:'WV-V3',pallet:'1/2',
 items:[{name:'Maltodextrin',kg:25,qty:40},{name:'Skimmed Milk Powder',kg:25,qty:30},{name:'Whey Protein Concentrate',kg:20,qty:15},{name:'Vanilla Flavour',kg:5,qty:4}]};
 let me=null,adminPin='',view='login',stage=null,checkNo=1,qr=null,selected=null;
-let state=JSON.parse(localStorage.getItem('bc_runtime')||'null')||{scans:{build:{1:{},2:{}},filling:{1:{},2:{}}},ops:{build:{},filling:{}},holds:[],audit:[]};
+let state=JSON.parse(localStorage.getItem('bc_runtime')||'null')||{scans:{build:{1:{},2:{}},filling:{1:{},2:{}}},ops:{build:{},filling:{}},holds:[],audit:[],quality:{status:'waiting',by:null,id:null,time:null,reason:null}};
 const A=document.getElementById('app');
 function save(){localStorage.setItem('bc_runtime',JSON.stringify(state))}
 function log(x){state.audit.unshift(new Date().toLocaleString()+' — '+x);save()}
 function H(){return `<header><b>APPLIED NUTRITION</b><span>Blender Control</span><span class="grow"></span><span>${me?.name||''}</span><button class="secondary" onclick="home()">Home</button><button class="secondary" onclick="logout()">Logout</button></header>`}
 function R(){
  if(view==='login'){A.innerHTML=`<main class="login"><div class="card"><span class="ey">BLENDER CONTROL</span><h1>Sign in</h1><p class="muted">Enter your 6-digit PIN</p><input id="pin" class="pin" inputmode="numeric" maxlength="6" type="password"><button class="primary" style="width:100%" onclick="login()">Login</button><p id="err" class="muted"></p></div></main>`;return}
- if(view==='home'){A.innerHTML=H()+`<main class="wrap"><span class="ey">${me.role.toUpperCase()}</span><h1>Select operation</h1><p class="muted">${DEMO.product} · ${DEMO.batch} · ${DEMO.spec} · Pallet ${DEMO.pallet}</p><div class="grid"><button class="tile" onclick="openStage('build')"><b>Build Pallet</b>Prepare, label and independently verify ingredients</button><button class="tile green" onclick="startMaster()"><b>Filling Check</b>Scan Master Pallet QR before verification</button></div>${me.role==='admin'?`<div class="card"><h2>Administration</h2><div class="actions"><button class="primary" onclick="view='users';R()">Users</button><button class="secondary" onclick="showAudit()">Audit trail</button><button class="danger" onclick="resetDemo()">Reset demo batch</button></div></div>`:''}</main>`;return}
- if(view==='users'){A.innerHTML=H()+`<main class="wrap"><span class="ey">ADMINISTRATION</span><h1>Users</h1><div class="card"><h2>Registered users</h2><div id="userlist"><p class="muted">Loading users...</p></div></div><div class="card"><h2>Add employee</h2><p class="muted">User ID is generated automatically (AN0001, AN0002...)</p><input id="nm" placeholder="Full name"><input id="np" maxlength="6" inputmode="numeric" type="password" placeholder="6-digit PIN"><select id="role"><option value="operator">Operator</option><option value="supervisor">Supervisor</option><option value="admin">Admin</option></select><button class="primary" onclick="addUser()">Create user</button><p id="msg" class="muted"></p></div></main>`;loadUsers();return}
+ if(view==='home'){A.innerHTML=H()+`<main class="wrap"><span class="ey">${me.role.toUpperCase()}</span><h1>Select operation</h1><p class="muted">${DEMO.product} · ${DEMO.batch} · ${DEMO.spec} · Pallet ${DEMO.pallet}</p><div class="grid"><button class="tile" onclick="openStage('build')"><b>Build Pallet</b>Prepare, label and independently verify ingredients</button><button class="tile green" onclick="startMaster()"><b>Filling Check</b>Scan Master Pallet QR before verification</button>${me.role==='quality'||me.role==='admin'?`<button class="tile" style="background:#7656a8" onclick="qualityStart()"><b>Quality Release</b>Release or hold after Filling verification</button>`:''}</div><div class="card"><h2>Filling / Quality status</h2><div id="qualityHome"></div></div>${me.role==='admin'?`<div class="card"><h2>Administration</h2><div class="actions"><button class="primary" onclick="view='users';R()">Users</button><button class="secondary" onclick="showAudit()">Audit trail</button><button class="danger" onclick="resetDemo()">Reset demo batch</button></div></div>`:''}</main>`;setTimeout(()=>{let e=document.getElementById('qualityHome');if(e)e.innerHTML=qualityBanner()},0);return}
+ if(view==='users'){A.innerHTML=H()+`<main class="wrap"><span class="ey">ADMINISTRATION</span><h1>Users</h1><div class="card"><h2>Registered users</h2><div id="userlist"><p class="muted">Loading users...</p></div></div><div class="card"><h2>Add employee</h2><p class="muted">User ID is generated automatically (AN0001, AN0002...)</p><input id="nm" placeholder="Full name"><input id="np" maxlength="6" inputmode="numeric" type="password" placeholder="6-digit PIN"><select id="role"><option value="operator">Operator</option><option value="supervisor">Supervisor</option><option value="quality">Quality</option><option value="admin">Admin</option></select><button class="primary" onclick="addUser()">Create user</button><p id="msg" class="muted"></p></div></main>`;loadUsers();return}
  if(view==='work'){
    const d=state.scans[stage][checkNo];
    A.innerHTML=H()+`<main class="wrap"><span class="ey">${stage.toUpperCase()} · CHECK ${checkNo}</span><h1>${DEMO.product}</h1><p class="muted">Batch ${DEMO.batch} · ${DEMO.spec} · Pallet ${DEMO.pallet}</p><span class="status">INDEPENDENT CHECK</span>
@@ -86,7 +86,7 @@ function completeCheck(){
  if(checkNo===1){state.ops[stage][1]=me.id;log(`${stage} Check 1 completed by ${me.name}`);save();alert('Check 1 complete. Check 2 must be completed by a DIFFERENT operator.');logout();return}
  if(state.ops[stage][1]===me.id){alert('Check 2 must be completed by a different operator.');return}
  state.ops[stage][2]=me.id;log(`${stage} Check 2 completed by ${me.name}`);save();
- if(stage==='build'){alert('Build complete. Master Pallet label is ready to print.');printMaster()}else alert('Filling verification complete.');
+ if(stage==='build'){alert('Build complete. Master Pallet label is ready to print.');printMaster()}else {state.quality={status:'waiting',by:null,id:null,time:null,reason:null};save();alert('Filling verification complete. WAITING FOR QUALITY RELEASE — DO NOT FILL BLENDER.');}
  view='home';R()
 }
 function hold(reason){state.holds.push({stage,checkNo,reason,user:me?.name,time:new Date().toISOString(),resolved:false});log('HOLDING: '+reason);alert('HOLDING — '+reason+'. Supervisor intervention required.')}
@@ -117,6 +117,27 @@ function printMaster(){
  w.document.write(`<html><head><style>@page{size:70mm 50mm;margin:0}body{text-align:center;font-family:Arial;padding:4mm}#q{width:28mm;margin:auto}</style><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script></head><body><h2>${DEMO.product}</h2><b>MASTER PALLET</b><div>${DEMO.batch}</div><div id="q"></div><script>new QRCode(document.getElementById('q'),{text:'AN|MASTER|${DEMO.batch}',width:106,height:106});setTimeout(()=>window.print(),600)<\/script></body></html>`);w.document.close()
 }
 function showAudit(){alert(state.audit.length?state.audit.join('\n'):'No audit events yet.')}
+function qualityBanner(){
+ const q=state.quality||{status:'waiting'};
+ if(!state.ops.filling[1]||!state.ops.filling[2]) return '<span class="status warn">FILLING CHECKS NOT COMPLETE</span><p class="muted">Quality release will be available after both Filling checks.</p>';
+ if(q.status==='released') return `<span class="status">QUALITY RELEASED ✓</span><h3>READY TO FILL</h3><p class="muted">Released by ${q.id||''} — ${q.by||''}<br>${q.time?new Date(q.time).toLocaleString():''}</p>`;
+ if(q.status==='hold') return `<span class="status warn">QUALITY HOLD</span><h3>DO NOT FILL</h3><p>${q.reason||''}</p>`;
+ return '<span class="status warn">WAITING FOR QUALITY RELEASE</span><h3>DO NOT FILL BLENDER</h3>';
+}
+function qualityStart(){
+ if(!(me.role==='quality'||me.role==='admin')) return alert('Quality access required.');
+ if(!state.ops.filling[1]||!state.ops.filling[2]) return alert('Filling Check 1 and Check 2 must be completed before Quality release.');
+ document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="qrel"><div class="dialog"><span class="ey">QUALITY RELEASE</span><h2>${DEMO.product}</h2><p><b>Batch:</b> ${DEMO.batch}<br><b>Pallet:</b> ${DEMO.pallet}</p><span class="status">FILLING CHECKS COMPLETE</span><p class="muted">Confirm the Quality decision for this batch.</p><div class="actions"><button class="primary" onclick="qualityDecision('released')">Release for Filling</button><button class="danger" onclick="qualityDecision('hold')">Place on Hold</button><button class="secondary" onclick="document.getElementById('qrel').remove()">Cancel</button></div></div></div>`);
+}
+function qualityDecision(decision){
+ let reason=null;
+ if(decision==='hold'){reason=prompt('Reason for Quality Hold');if(!reason)return}
+ state.quality={status:decision,by:me.name,id:me.employee_id,time:new Date().toISOString(),reason};
+ save();log(`QUALITY ${decision.toUpperCase()} by ${me.name}${reason?' — '+reason:''}`);
+ document.getElementById('qrel')?.remove();
+ alert(decision==='released'?'QUALITY RELEASED — READY TO FILL':'QUALITY HOLD — DO NOT FILL');
+ R();
+}
 function resetDemo(){if(!confirm('Reset all demo scans/checks on this device?'))return;localStorage.removeItem('bc_runtime');location.reload()}
 R();
 </script></body></html>
