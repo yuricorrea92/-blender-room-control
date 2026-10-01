@@ -67,7 +67,7 @@ async function syncProductionQueue(){
  }catch(e){console.error('Production queue sync failed',e);return BACKEND_QUEUE}
 }
 function liveCatalog(){
- const local=PRODUCT_CATALOG.map((x,i)=>({...effectiveRecipe(x),_baseIndex:i,_source:'local'}));
+ const local=PRODUCT_CATALOG.map((x,i)=>{const z=effectiveRecipe(x);return {...z,items:(z.items||[]).map(v=>({...v,qty:Math.min(Number(v.qty)||1,3)})),_baseIndex:i,_source:'local'}});
  const remote=BACKEND_QUEUE.map(x=>({...x,pallet:'1/1',status:'scheduled',_source:'trello'}));
  return [...remote,...local];
 }
@@ -77,6 +77,33 @@ function scheduledProductsForBlender(code){
  return (BLENDERS[code]?.queue||[]).map((product,i)=>({product,batch:'',spec:'',blender:code,items:[],position:i+1,_source:'demo'}));
 }
 function queueForBlender(code){ return scheduledProductsForBlender(code).map(x=>x.product); }
+async function syncSharedChecks(batch,stg){
+ try{
+  const {data,error}=await SB.rpc('get_runtime_checks',{p_batch_code:batch,p_stage:stg});
+  if(error)throw error;
+  state.ops[stg]={};
+  (data||[]).forEach(r=>{state.ops[stg][r.check_no]=r.operator_id;});
+  save(); return data||[];
+ }catch(e){console.error('Shared check sync failed',e);return []}
+}
+async function completeSharedCheck(batch,stg,no){
+ const {data,error}=await SB.rpc('complete_runtime_check',{p_batch_code:batch,p_stage:stg,p_check_no:no,p_operator_id:me.id});
+ if(error)return {ok:false,message:error.message};
+ const r=Array.isArray(data)?data[0]:data;
+ return r||{ok:false,message:'Unable to complete check'};
+}
+async function resumeFillingForSelected(){
+ const code=state.currentFillingBlender,sel=state.selectedFillingProduct?.[code];
+ if(!sel)return;
+ await syncSharedChecks(sel.batch||DEMO.batch,'filling');
+ if(state.ops.filling[1]&&!state.ops.filling[2]){
+   if(state.ops.filling[1]===me.id){alert('Filling Check 1 is already complete. Check 2 must be completed by a DIFFERENT operator.');return;}
+   stage='filling';checkNo=2;state.scans.filling[2]={};save();view='work';R();return;
+ }
+ if(!state.ops.filling[1]){stage='filling';checkNo=1;view='work';R();return;}
+ alert('Both Filling checks are already complete for this batch.');
+}
+
 function ensureRuntimeState(){
  if(!state.scans)state.scans={}; if(!state.scans.build)state.scans.build={1:{},2:{}}; if(!state.scans.filling)state.scans.filling={1:{},2:{}};
  if(!state.scans.build[1])state.scans.build[1]={}; if(!state.scans.build[2])state.scans.build[2]={};
@@ -157,11 +184,14 @@ async function addUser(){
  if(error){msg.textContent='User IDs are generated automatically (AN0001, AN0002...).';return}
  msg.textContent='User '+data+' created successfully.';document.getElementById('nm').value='';document.getElementById('np').value='';loadUsers()
 }
-function startMaster(){
+async function startMaster(){
  const code=state.currentFillingBlender,sel=state.selectedFillingProduct?.[code];
  if(!sel)return alert('Select the product for this Blender first.');
  if(sel.batch){DEMO.product=sel.product;DEMO.batch=sel.batch;DEMO.spec=sel.spec||'';DEMO.items=(sel.items||[]).map(v=>({...v}));}
- stage='filling'; camera('master',null)
+ await syncSharedChecks(DEMO.batch,'filling');
+ if(state.ops.filling[1]===me.id&&!state.ops.filling[2])return alert('You completed Filling Check 1. Check 2 must be completed by a DIFFERENT operator.');
+ if(state.ops.filling[1]&&state.ops.filling[2])return alert('Both Filling checks are already complete for this batch.');
+ stage='filling';checkNo=state.ops.filling[1]?2:1;save();camera('master',null)
 }
 function scanBag(i){selected=i;camera('bag',i)}
 function camera(kind,i){
@@ -183,7 +213,7 @@ function gotQR(kind,i,t){
    if(state.activeFillingBatch!==DEMO.batch){
      state.scans.filling={1:{},2:{}};state.ops.filling={};state.activeFillingBatch=DEMO.batch;
    }
-   save();stopCam();openStage('filling');return
+   save();stopCam();resumeFillingForSelected();return
  }
  const x=DEMO.items[i],a=t.trim().split('|');if(a.length<7||a[0]!=='AN'||a[1]!=='BAG'||a[2]!==DEMO.batch||norm(a[3])!==norm(x.name)){alert('Bag QR does not match the selected batch/material.');return;}
  const seq=+a[4],total=+a[5],kg=+a[6];if(total!==x.qty||kg!==x.kg||seq<1||seq>x.qty){stopCam();hold('QR/specification mismatch: '+x.name);return}
@@ -192,7 +222,7 @@ function gotQR(kind,i,t){
  if(seq===1&&!confirm(`CONFIRM MATERIAL\n\n${x.name}\n${x.kg} kg\n\nDoes the physical product and bag weight match?`)){hold('Material/weight rejected: '+x.name);return}
  state.scans[stage][checkNo][i]=[...arr,seq];log(`${stage} Check ${checkNo}: ${x.name} ${seq}/${x.qty} scanned by ${me.name}`);R()
 }
-function completeCheck(){
+async function completeCheck(){
  const d=state.scans[stage][checkNo],missing=DEMO.items.filter((x,i)=>(d[i]||[]).length!==x.qty);
  if(missing.length){hold('Incomplete scan: '+missing.map(x=>x.name).join(', '));return}
  if(checkNo===1){state.ops[stage][1]=me.id;log(`${stage} Check 1 completed by ${me.name}`);save();alert('Check 1 complete. Check 2 must be completed by a DIFFERENT operator.');logout();return}
@@ -401,7 +431,7 @@ function selectFillingProduct(code,index){
    DEMO.product=x.product; DEMO.batch=x.batch; DEMO.spec=x.spec||''; DEMO.items=(x.items||[]).map(v=>({...v}));
  }
  state.fillingPrep={checklist:false,knifeOut:false,knifeIn:false};
- save(); renderFillingPanel();
+ save(); syncSharedChecks(x.batch||DEMO.batch,'filling').then(()=>renderFillingPanel());
 }
 function clearFillingProduct(code){ state.selectedFillingProduct[code]=null; save(); renderFillingPanel(); }
 function renderFillingPanel(){
