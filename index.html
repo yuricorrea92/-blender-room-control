@@ -37,7 +37,7 @@ function R(){
  if(view==='work'){
    const d=state.scans[stage][checkNo];
    A.innerHTML=H()+`<main class="wrap"><span class="ey">${stage.toUpperCase()} · CHECK ${checkNo}</span><h1>${DEMO.product}</h1><p class="muted">Batch ${DEMO.batch} · ${DEMO.spec} · Pallet ${DEMO.pallet}</p><span class="status">INDEPENDENT CHECK</span>
-   <div class="card">${DEMO.items.map((x,i)=>{let n=(d[i]||[]).length,p=Math.min(100,100*n/x.qty);return `<div class="row"><div><b>${x.name}</b><div class="muted">${x.kg} kg · ${x.qty} required</div><div class="bar"><i style="width:${p}%"></i></div><div class="actions"><button class="primary" onclick="scanBag(${i})">Scan QR</button>${stage==='build'?`<button class="secondary" onclick="labels(${i})">Print ${x.qty} labels</button>`:''}</div></div><b>${n}/${x.qty}</b></div>`}).join('')}</div>
+   <div class="card">${DEMO.items.map((x,i)=>{let n=(d[i]||[]).length,p=Math.min(100,100*n/x.qty);return `<div class="row"><div><b>${x.name}</b><div class="muted">${x.kg} kg · ${x.qty} required</div><div class="bar"><i style="width:${p}%"></i></div><div class="actions"><button class="primary" onclick="scanBag(${i})">Scan QR</button>${stage==='build'?`<button class="secondary" onclick="previewLabels(${i})">Generate ${x.qty} QR Codes</button><button class="secondary" onclick="showTestQR(${i})">Test QR</button><button class="secondary" onclick="labels(${i})">Print labels</button>`:''}</div></div><b>${n}/${x.qty}</b></div>`}).join('')}</div>
    <div class="actions"><button class="primary" onclick="completeCheck()">Complete Check ${checkNo}</button><button class="danger" onclick="reportHold()">Report discrepancy</button><button class="secondary" onclick="showAudit()">Audit</button></div></main>`;return}
 }
 async function login(){
@@ -85,6 +85,21 @@ function completeCheck(){
 }
 function hold(reason){state.holds.push({stage,checkNo,reason,user:me?.name,time:new Date().toISOString(),resolved:false});log('HOLDING: '+reason);alert('HOLDING — '+reason+'. Supervisor intervention required.')}
 function reportHold(){const r=prompt('Describe the discrepancy');if(r)hold(r)}
+function previewLabels(i){
+ const x=DEMO.items[i];
+ document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="qrprev"><div class="dialog" style="max-height:90vh;overflow:auto"><span class="ey">QR LABEL GENERATOR</span><h2>${x.name}</h2><p class="muted">${x.kg} kg · ${x.qty} unique bag labels · Batch ${DEMO.batch}</p><div id="qrgrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px"></div><div class="actions"><button class="primary" onclick="labels(${i})">Print all ${x.qty}</button><button class="secondary" onclick="document.getElementById('qrprev').remove()">Close</button></div></div></div>`);
+ const g=document.getElementById('qrgrid');
+ for(let n=1;n<=x.qty;n++){
+   const box=document.createElement('div');box.style='border:1px solid #dce5ee;border-radius:10px;padding:10px;text-align:center;background:white';
+   box.innerHTML=`<div id="pv${i}_${n}" style="display:flex;justify-content:center"></div><b>${String(n).padStart(2,'0')}/${x.qty}</b><div class="small">${x.name} · ${x.kg} kg</div>`;
+   g.appendChild(box);
+   new QRCode(document.getElementById(`pv${i}_${n}`),{text:`AN|BAG|${DEMO.batch}|${x.name.toUpperCase()}|${n}|${x.qty}|${x.kg}`,width:112,height:112});
+ }
+ log(`${x.qty} QR codes previewed: ${x.name}`);
+}
+function showTestQR(i,n=1){
+ const x=DEMO.items[i];document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="testqr"><div class="dialog" style="text-align:center"><span class="ey">TEST QR</span><h2>${x.name} ${String(n).padStart(2,'0')}/${x.qty}</h2><div id="testqrcode" style="display:flex;justify-content:center;margin:20px"></div><p class="muted">Open this QR on another screen and scan it with Blender Control.</p><button class="secondary" onclick="document.getElementById('testqr').remove()">Close</button></div></div>`);new QRCode(document.getElementById('testqrcode'),{text:`AN|BAG|${DEMO.batch}|${x.name.toUpperCase()}|${n}|${x.qty}|${x.kg}`,width:240,height:240})
+}
 function labels(i){
  const x=DEMO.items[i],w=window.open('','_blank');if(!w)return alert('Allow pop-ups for label printing.');
  let h=`<html><head><style>@page{size:70mm 50mm;margin:0}body{margin:0;font-family:Arial}.l{width:70mm;height:50mm;padding:4mm;page-break-after:always;display:flex;gap:3mm;align-items:center}.q{width:28mm}.t b{font-size:14pt;display:block}</style><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script></head><body>`;
