@@ -259,6 +259,13 @@ function fillingHub(){
  <button class="secondary" onclick="document.getElementById('fhub').remove()">Close</button>
  </div></div>`);
 }
+function ensureFillingPrep(){
+ if(!state.fillingPrep || typeof state.fillingPrep!=='object') state.fillingPrep={};
+ if(typeof state.fillingPrep.checklist!=='boolean') state.fillingPrep.checklist=false;
+ if(typeof state.fillingPrep.knifeOut!=='boolean') state.fillingPrep.knifeOut=false;
+ if(typeof state.fillingPrep.knifeIn!=='boolean') state.fillingPrep.knifeIn=false;
+ return state.fillingPrep;
+}
 function openFillerChecklist(){document.getElementById('fprep')?.remove();document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="fcheck"><div class="dialog"><span class="ey">FILLER CHECKLIST</span><h2>Pre-fill checklist</h2>${['Work area clean and ready','Correct equipment available','Blender / filling area visually checked','Required PPE in place','No foreign material observed'].map(x=>`<label style="display:block;padding:10px 0"><input type="checkbox" class="precheck"> ${x}</label>`).join('')}<div class="actions"><button class="primary" onclick="saveFillerChecklist()">Complete Checklist</button><button class="secondary" onclick="document.getElementById('fcheck').remove();fillingHub()">Cancel</button></div></div></div>`)}
 function saveFillerChecklist(){let b=[...document.querySelectorAll('.precheck')];if(b.some(x=>!x.checked))return alert('Complete every checklist item first.');ensureFillingPrep();state.fillingPrep.checklist=true;save();log(`FILLER CHECKLIST completed by ${me.name}`);document.getElementById('fcheck').remove();fillingHub()}
 function knifeQR(d){ensureFillingPrep();document.getElementById('fprep')?.remove();let t=d==='in'?'KNIFE IN':'KNIFE OUT';document.body.insertAdjacentHTML('beforeend',`<div class="modal" id="knife"><div class="dialog"><span class="ey">KNIFE CONTROL</span><h2>${t}</h2><p>Scan the QR code attached to the knife.</p><div class="actions"><button class="primary" onclick="recordKnife('${d}','AN|KNIFE|DEMO-001')">Test Knife QR</button><button class="secondary" onclick="document.getElementById('knife').remove();fillingHub()">Cancel</button></div></div></div>`)}
@@ -268,12 +275,17 @@ function fillingScanComplete(){
  return !!(state.ops && state.ops.filling && state.ops.filling[2]);
 }
 function scheduleAutoCloseAfterKnifeIn(){
- const code=state.currentFillingBlender||'BLENDER-1';
+ const code=state.currentFillingBlender;
+ if(!code || !BLENDERS[code]) return;
  if(!fillingScanComplete()) return;
  if(!state.autoClose) state.autoClose={};
  const due=Date.now()+10*60*1000;
  const released=state.qualityByBlender?.[code];
- state.autoClose[code]={due,product:(released?.product||BLENDERS[code].queue[((state.blenderQueueIndex||{})[code]||0)]||'Unknown product'),knifeInAt:new Date().toISOString(),filler:me.name,fillerId:me.employee_id};
+ if(!released || released.status!=='released' || !released.product){
+   alert('Knife In recorded, but the blender has no Quality-released product. Automatic cycle close was not started.');
+   return;
+ }
+ state.autoClose[code]={due,product:released.product,knifeInAt:new Date().toISOString(),filler:me.name,fillerId:me.employee_id};
  save();log(`${code} completion timer started after KNIFE IN — closes in 10 minutes`);
  setTimeout(()=>processAutoClose(code),10*60*1000);
 }
@@ -286,8 +298,7 @@ function processAutoClose(code){
  const blender=BLENDERS[code];
  const idx=blender.queue.indexOf(x.product);
  if(idx>=0){
-   blender.queue.splice(idx,1);
-   state.blenderQueueIndex[code]=Math.min(state.blenderQueueIndex[code]||0,blender.queue.length);
+   state.blenderQueueIndex[code]=Math.max((state.blenderQueueIndex[code]||0),idx+1);
  } else state.blenderQueueIndex[code]=(state.blenderQueueIndex[code]||0)+1;
  if(!state.qualityByBlender)state.qualityByBlender={};
  state.qualityByBlender[code]={status:'waiting',reason:'Previous product completed — awaiting Quality release',by:null,id:null,time:new Date().toISOString()};
@@ -355,7 +366,7 @@ function selectQualityProduct(code,product){
  if(!confirm(msg))return;
  if(!state.qualityByBlender)state.qualityByBlender={};
  state.qualityByBlender[code]={status:'released',product,reason:null,by:me.name,id:me.employee_id,time:new Date().toISOString()};
- save();log(`${code} RELEASED for ${product} by ${me.name}`);
+ save();log(`${code} ${current?.status==='released'&&current.product!==product?'RELEASE CHANGED':'RELEASED'} for ${product} by ${me.name}`);
  document.getElementById('brelease')?.remove();alert(`${BLENDERS[code].name} RELEASED — ${product}`);openBlenderRelease(code);
 }
 function setBlenderHold(){
